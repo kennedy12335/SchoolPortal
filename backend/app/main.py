@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base, get_db, init_db, drop_all_tables
-from .routers import parent, student, club, payment, fees, exams
+from .routers import parent, student, club, payment, fees, exams, admin_analytics
 import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     init_db()
-    # drop_all_tables()
+    drop_all_tables()
     logger.info("Database initialized")
     
     yield
@@ -52,6 +52,7 @@ app.include_router(club.router, prefix="/api/clubs", tags=["clubs"])
 app.include_router(payment.router, prefix="/api/payments", tags=["payments"])
 app.include_router(fees.router, prefix="/api/fees", tags=["fees"])
 app.include_router(exams.router, prefix="/api/exams", tags=["exams"])
+app.include_router(admin_analytics.router, prefix="/api/admin", tags=["admin-analytics"])
 
 @app.get("/")
 async def root():

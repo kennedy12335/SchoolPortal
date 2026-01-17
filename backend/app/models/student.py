@@ -15,7 +15,6 @@ class Student(BaseModel):
     class_name = Column(Enum(ClassName), nullable=False)
     email = Column(String, nullable=True, unique=True, index=True)
     outstanding_balance = Column(Float, nullable=True)
-    pocket_money_balance = Column(Float, default=0)
         
     # Relationships
     parents = relationship(

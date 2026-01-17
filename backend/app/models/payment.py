@@ -23,7 +23,7 @@ class Payment(BaseModel):
     payment_reference = Column(String, unique=True)
     payment_method = Column(String)
     description = Column(String)
-    payment_type = Column(Enum(PaymentType))
+    # payment_type = Column(Enum(PaymentType))
 
     payer_id = Column(String, ForeignKey("parents.id"))
     payer = relationship("Parent", back_populates="payment")

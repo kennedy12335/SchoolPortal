@@ -271,7 +271,6 @@ def generate_students(families: list) -> list:
                 "year_group": year_group,
                 "class_name": class_name,
                 "email": student_email,
-                "outstanding_balance": round(random.uniform(0, 50000), 2) if random.random() < 0.4 else 0,
                 "parent_ids": [p["id"] for p in family["parents"]],
             }
 
@@ -338,8 +337,7 @@ def seed_database(db: Session):
             last_name=student_data["last_name"],
             year_group=student_data["year_group"],
             class_name=student_data["class_name"],
-            email=student_data["email"],
-            outstanding_balance=student_data["outstanding_balance"],
+            email=student_data["email"]
         )
 
         # Link parents to student
@@ -380,28 +378,7 @@ def seed_database(db: Session):
     for club in clubs:
         print(f"    - {club.name} (Capacity: {club.capacity}, Price: {club.price})")
 
-    # Optionally assign some students to clubs
-    print("\nAssigning students to clubs...")
-    membership_count = 0
-    for student in student_objects:
-        # 40% chance a student joins at least one club
-        if random.random() < 0.4:
-            # Join 1-3 clubs
-            num_clubs = random.randint(1, min(3, len(clubs)))
-            selected_clubs = random.sample(clubs, num_clubs)
 
-            for club in selected_clubs:
-                membership = ClubMembership(
-                    id=str(uuid4()),
-                    student_id=student.id,
-                    club_id=club.id,
-                    payment_confirmed=random.random() < 0.7,  # 70% have confirmed payment
-                    status="active" if random.random() < 0.95 else "inactive",
-                )
-                db.add(membership)
-                membership_count += 1
-
-    print(f"  Created {membership_count} club memberships")
 
     # Commit all changes
     db.commit()
@@ -414,7 +391,6 @@ def seed_database(db: Session):
     print(f"  Total Students: {len(student_objects)}")
     print(f"  Total Families: {len(families)}")
     print(f"  Total Clubs: {len(clubs)}")
-    print(f"  Total Club Memberships: {membership_count}")
 
     # Family statistics
     single_parent_families = sum(1 for f in families if len(f["parents"]) == 1)
