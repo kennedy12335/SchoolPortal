@@ -1,0 +1,203 @@
+from ..models.fees import Fees
+from ..routers.fees import calculate_fees
+from fastapi import APIRouter, Depends, HTTPException, Request
+import hmac
+import hashlib
+from sqlalchemy.orm import Session
+from typing import List, Dict
+from ..database import get_db
+from ..models.payment import Payment, PaymentStatus, ExamPayment
+from ..models.student import Student
+from ..models.parent import Parent
+from ..models.club import Club, ClubMembership
+from ..utils.exams import update_payment_records, update_exam_payment_records
+import requests
+import os
+from dotenv import load_dotenv
+import logging
+
+# Import the centralized payment service and schemas
+from ..services.payment_service import (
+    initialize_payment, 
+    PaymentType, 
+    SchoolFeesPaymentData,
+)
+from ..schemas.payment import (
+    PaymentBase,
+    PaymentCreate,
+    PaymentResponse,
+    PaystackResponse
+)
+
+load_dotenv()
+
+router = APIRouter()
+PAYSTACK_INITIALIZE_URL = "https://api.paystack.co/transaction/initialize"
+PAYSTACK_VERIFY_URL = "https://api.paystack.co/transaction/verify/"
+PAYSTACK_SPLIT_URL = "https://api.paystack.co/split"
+
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
+
+# Setup logger
+logger = logging.getLogger(__name__)
+
+@router.post("/initialize", response_model=dict)
+async def initialize_payment_endpoint(payment: PaymentCreate, db: Session = Depends(get_db)):
+    logger.info(f"Initializing payment for students: {payment.student_ids}")
+    
+    try:    
+        # Calculate and validate the amount
+        fee_calculation = await calculate_fees(
+            student_ids=payment.student_ids,
+            student_club_ids=payment.student_club_ids,
+            db=db
+        )
+        
+        # Validate that the submitted amount matches the calculated amount
+        if abs(payment.amount - fee_calculation.total_amount) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid amount. Expected: {fee_calculation.total_amount}, Got: {payment.amount}"
+            )
+        
+        # Prepare payment data for the centralized service
+        payment_data = SchoolFeesPaymentData(
+            student_ids=payment.student_ids,
+            amount=payment.amount,
+            club_amount=payment.club_amount or 0.0,
+            payment_method=payment.payment_method,
+            parent_id=payment.parent_id,
+            student_club_ids=payment.student_club_ids,
+            description=payment.description
+        )
+        
+        # Use the centralized payment service
+        result = initialize_payment(
+            payment_type=PaymentType.SCHOOL_FEES,
+            payment_data=payment_data,
+            db=db
+        )
+        
+        if result.status:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.message)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error initializing payment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/", response_model=List[PaymentResponse])
+def get_payments(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    payments = db.query(Payment).offset(skip).limit(limit).all()
+    return payments
+
+@router.get("/{payment_id}", response_model=PaymentResponse)
+def get_payment(payment_id: str, db: Session = Depends(get_db)):
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return payment
+
+@router.post("/verify/{payment_reference}")
+async def verify_payment_status(payment_reference: str, db: Session = Depends(get_db)):
+    # First check our local database
+    payment = db.query(Payment).filter(Payment.payment_reference == payment_reference).first()
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    # Also verify with Paystack
+    try:
+        paystack_response = verify_payment(payment_reference)
+        if paystack_response["status"] and paystack_response["data"]["status"] == "success":
+            # Update local status if needed
+            if payment.status != PaymentStatus.COMPLETED:
+                payment.status = PaymentStatus.COMPLETED
+                db.commit()
+            return {"status": "completed"}
+        elif paystack_response["data"]["status"] == "pending":
+            return {"status": "pending"}
+        else:
+            return {"status": "failed"}
+    except Exception as e:
+        logger.error(f"Error verifying payment with Paystack: {str(e)}")
+        # Fall back to local status if Paystack verification fails
+        return {"status": payment.status.value}
+
+@router.post("/webhook")
+async def paystack_webhook(request: Request, db: Session = Depends(get_db)) -> Dict:
+    try:
+        logger.info("=============== NEW WEBHOOK REQUEST ===============")
+        logger.info(f"Headers: {request.headers}")
+
+        # Verify the request signature
+        signature = request.headers.get('x-paystack-signature')
+        logger.info(f"Received signature: {signature}")
+
+        if not signature:
+            logger.error("Signature missing in request")
+            raise HTTPException(status_code=400, detail="Signature missing")
+
+        # Get raw request body
+        body = await request.body()
+        logger.info(f"Raw body: {body.decode()}")
+
+        # Compute the expected signature
+        secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+        computed_signature = hmac.new(
+            secret_key.encode('utf-8'),
+            body,
+            hashlib.sha512
+        ).hexdigest()
+        logger.info(f"Computed signature: {computed_signature}")
+
+        # Compare the signatures
+        if not hmac.compare_digest(computed_signature, signature):
+            logger.error("Invalid signature")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+
+        # Parse the request data
+        event = await request.json()
+        logger.info(f"Parsed event data: {event}")
+        print(event)
+        if event['event'] == 'charge.success':
+            reference = event['data']['reference']
+            logger.info(f"Transaction reference: {reference}")
+
+            response = verify_payment(reference)
+            logger.info(f"Verification response: {response}")
+
+            if response["data"]["status"] == "success":
+                logger.info(f"Payment status is success")
+                if event['data']['metadata']['payment_type'] == 'school_fees':
+                    logger.info(f"Payment type is school fees")
+                    payment = db.query(Payment).filter(Payment.payment_reference == reference).first()
+                    if payment:
+                        logger.info(f"Payment found")
+                        await update_payment_records(db, payment, payment.student_ids, logger)
+                        return {"status": "success"}
+
+                elif event['data']['metadata']['payment_type'] == 'exam_fees':
+                    logger.info(f"Payment type is exam fees")
+                    exam_payments = db.query(ExamPayment).filter(ExamPayment.payment_reference == reference)
+                    if exam_payments:
+                        logger.info(f"Exam payment found")
+                        await update_exam_payment_records(db, exam_payments, logger)
+                        return {"status": "success"}
+        return {"status": "failed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing webhook: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def verify_payment(payment_reference: str):
+    secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+    headers = {
+        "Authorization": f"Bearer {secret_key}",
+        "Content-Type": "application/json"
+    }
+    response = requests.get(f"{PAYSTACK_VERIFY_URL}{payment_reference}", headers=headers)
+    return response.json()
