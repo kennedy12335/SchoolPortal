@@ -2,3 +2,5 @@
 __pycache__/
 .env
 .coverage
+node_modules/
+bsc-payment/build/

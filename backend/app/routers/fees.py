@@ -28,7 +28,7 @@ class FeesResponse(FeesBase):
     total: float
 
 class ClubInfo(BaseModel):
-    id: int
+    id: str
     name: str
     price: float
 

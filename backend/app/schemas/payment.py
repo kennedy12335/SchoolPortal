@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class PaymentType(str, Enum):
     SCHOOL_FEES = "school_fees"
     EXAM_FEES = "exam_fees"
+    POCKET_MONEY = "pocket_money"
 
 
 # class PayerInfoBase(BaseModel):

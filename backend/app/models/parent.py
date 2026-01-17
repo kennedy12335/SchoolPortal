@@ -13,14 +13,6 @@ parent_student_association = Table(
 class Parent(BaseModel):
     __tablename__ = "parents"
 
-    # name = Column(String, nullable=False)
-    # email = Column(String, unique=True, nullable=True)
-    # phone = Column(String, nullable=True)
-    # address = Column(String, nullable=True)
-    
-    # # Relationships
-    # students = relationship("Student", back_populates="parent")
-
     auth_id = Column(String, nullable=False, unique=True, index=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)

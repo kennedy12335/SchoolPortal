@@ -10,6 +10,10 @@ class PaymentStatus(enum.Enum):
     FAILED = "failed"
     REFUNDED = "refunded"
 
+class PaymentType(enum.Enum):
+    SCHOOL_FEES = "school_fees"
+    POCKET_MONEY = "pocket_money"
+
 class Payment(BaseModel):
     __tablename__ = "payments"
 
@@ -19,6 +23,7 @@ class Payment(BaseModel):
     payment_reference = Column(String, unique=True)
     payment_method = Column(String)
     description = Column(String)
+    payment_type = Column(Enum(PaymentType))
 
     payer_id = Column(String, ForeignKey("parents.id"))
     payer = relationship("Parent", back_populates="payment")

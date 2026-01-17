@@ -37,8 +37,10 @@ app.add_middleware(
         os.getenv("local_frontend_url"),
         os.getenv("zrok_frontend_url"),
         os.getenv("frontend_url"),
+        "https://hyperrhythmical-gabriela-unpoutingly.ngrok-free.dev",
+        "http://192.168.1.149:3000"
     ],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

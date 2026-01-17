@@ -1,0 +1,131 @@
+/* Container styles */
+.success-container {
+  @apply min-h-screen bg-gray-100 py-12;
+}
+
+.success-content {
+  @apply max-w-3xl mx-auto px-4;
+}
+
+.success-card {
+  @apply bg-white rounded-lg shadow-lg p-8;
+}
+
+/* Loading state styles */
+.loading-spinner {
+  @apply animate-spin h-12 w-12 mx-auto mb-4 border-4 border-blue-600 border-t-transparent rounded-full;
+}
+
+.loading-text {
+  @apply text-gray-600;
+}
+
+/* Error state styles */
+.error-icon {
+  @apply h-16 w-16 text-red-500;
+}
+
+.error-title {
+  @apply text-3xl font-bold text-gray-900 mb-2;
+}
+
+.error-message {
+  @apply text-gray-600 mb-4;
+}
+
+/* Success state styles */
+.success-icon {
+  @apply h-16 w-16 text-green-500;
+}
+
+.success-header {
+  @apply text-center mb-8;
+}
+
+.success-title {
+  @apply text-3xl font-bold text-gray-900 mb-2;
+}
+
+.success-message {
+  @apply text-gray-600 mb-8;
+}
+
+/* Receipt styles */
+.receipt-container {
+  @apply bg-gray-50 rounded-lg p-6 text-left;
+}
+
+.receipt-header {
+  @apply border-b pb-4 mb-4;
+}
+
+.receipt-title {
+  @apply text-xl font-semibold mb-4;
+}
+
+.receipt-grid {
+  @apply grid grid-cols-2 gap-4 text-sm;
+}
+
+.receipt-label {
+  @apply text-gray-600;
+}
+
+.receipt-value {
+  @apply font-medium ml-2;
+}
+
+/* Student details styles */
+.student-item {
+  @apply border-b last:border-0 pb-4 last:pb-0;
+}
+
+.student-name {
+  @apply font-semibold text-lg mb-2;
+}
+
+.fee-list {
+  @apply space-y-1 text-sm;
+}
+
+.fee-row {
+  @apply flex justify-between text-gray-600;
+}
+
+.club-fees {
+  @apply mt-2;
+}
+
+.club-fees-title {
+  @apply text-gray-600 font-medium mb-1;
+}
+
+.club-fee-item {
+  @apply flex justify-between text-gray-600 pl-4;
+}
+
+.student-total {
+  @apply flex justify-between font-medium text-blue-600 mt-2 pt-2 border-t;
+}
+
+.grand-total {
+  @apply flex justify-between text-lg font-bold text-blue-600 pt-4 border-t;
+}
+
+/* Button styles */
+.return-button {
+  @apply inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors mt-8;
+}
+
+/* Exam breakdown styles */
+.exam-breakdown-section {
+  @apply bg-white border border-gray-200 rounded-lg p-4 mb-4;
+}
+
+.exam-breakdown-title {
+  @apply text-lg font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-200;
+}
+
+.exam-breakdown-item {
+  @apply border-b border-gray-100 last:border-0 pb-3 last:pb-0 mb-3 last:mb-0;
+} 
