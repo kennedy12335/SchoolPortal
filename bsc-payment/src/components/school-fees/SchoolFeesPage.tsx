@@ -11,7 +11,8 @@ import ClubSelector from './ClubSelector';
 import FeeBreakdown from './FeeBreakdown';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
-import { Club, StudentFeeDetail } from '../../types/types';
+import { Club, StudentFeeDetail, StudentFee, StudentExamFee } from '../../types/types';
+import FeeService from '../../services/feeService';
 import { ArrowLeft, CreditCard, Loader2, Users } from 'lucide-react';
 
 interface StudentClubSelection {
@@ -27,6 +28,7 @@ const SchoolFeesPage: React.FC = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentClubSelections, setStudentClubSelections] = useState<StudentClubSelection>({});
   const [studentFees, setStudentFees] = useState<StudentFeeDetail[]>([]);
+  const [selectedStudentFeeIds, setSelectedStudentFeeIds] = useState<string[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -182,7 +184,8 @@ const SchoolFeesPage: React.FC = () => {
         parent_id: parent?.id,
         payment_method: 'bank_transfer',
         description: `Payment for ${selectedStudentIds.length} student(s)`,
-        student_club_ids: studentClubIds
+        student_club_ids: studentClubIds,
+        student_fee_ids: selectedStudentFeeIds
       });
 
       if (response.data.data?.authorization_url) {

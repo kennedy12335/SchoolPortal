@@ -182,12 +182,9 @@ const PaymentSuccess: React.FC = () => {
                 <h3 className="font-semibold text-lg">{student.name}</h3>
 
                 <div className="space-y-2 text-sm">
-                  <FeeRow label="Tuition" amount={student.fee_breakdown.tuition} />
-                  <FeeRow label="Boarding" amount={student.fee_breakdown.boarding} />
-                  <FeeRow label="Utility & Maintenance" amount={student.fee_breakdown.utility} />
-                  <FeeRow label="Prize Giving Day" amount={student.fee_breakdown.prize_giving_day} />
-                  <FeeRow label="Year Book" amount={student.fee_breakdown.year_book} />
-                  <FeeRow label="Offering & Hair" amount={student.fee_breakdown.offering_and_hairs} />
+                  {Object.entries(student.fee_breakdown.fees ?? {}).map(([label, value]) => (
+                    <FeeRow key={label} label={label} amount={Number(value) || 0} />
+                  ))}
 
                   {student.clubs.length > 0 && (
                     <>

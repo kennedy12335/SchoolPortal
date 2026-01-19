@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     init_db()
-    drop_all_tables()
+    # drop_all_tables()
     logger.info("Database initialized")
     
     yield

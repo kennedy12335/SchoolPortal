@@ -1,13 +1,15 @@
-from ..models.club import Club
-from ..models.student import Student
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Dict
 from ..database import get_db
-from ..models.fees import Fees
+from ..models.fee import Fee
 from pydantic import BaseModel
 import logging
+from uuid import uuid4
 from dotenv import load_dotenv
+
+from ..services.fees_service import calculate_fees as calculate_fees_service
+from ..schemas.fees import DetailedFeeCalculationResponse
 
 load_dotenv()
 
@@ -17,153 +19,76 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 class FeesBase(BaseModel):
-    tuition: float
-    boarding: float
-    utility: float
-    prize_giving_day: float
-    year_book: float
-    offering_and_hairs: float
+    # Dynamic mapping of fee code -> amount, e.g. {"TUITION": 100.0, "SPORTS": 50.0}
+    fees: Dict[str, float]
 
-class FeesResponse(FeesBase):
+
+class FeesResponse(BaseModel):
+    fees: Dict[str, float]
     total: float
-
-class ClubInfo(BaseModel):
-    id: str
-    name: str
-    price: float
-
-class StudentFeeCalculation(BaseModel):
-    student_id: str
-    student_name: str
-    subtotal: float
-    final_amount: float
-    clubs: List[ClubInfo]
-
-class FeeCalculationResponse(BaseModel):
-    total_amount: float
-    student_fees: List[StudentFeeCalculation]
-
-class FeeBreakdown(BaseModel):
-    tuition: float
-    boarding: float
-    utility: float
-    prize_giving_day: float
-    year_book: float
-    offering_and_hairs: float
-    club_fees: List[ClubInfo]  # List of selected clubs and their fees
-    subtotal: float
-    final_amount: float
-
-class StudentFeeDetail(BaseModel):
-    student_id: str
-    student_name: str
-    fee_breakdown: FeeBreakdown
-
-class DetailedFeeCalculationResponse(BaseModel):
-    total_amount: float
-    student_fees: List[StudentFeeDetail]
 
 @router.get("/", response_model=FeesResponse)
 async def get_fees(db: Session = Depends(get_db)):
     logger.info("Fetching current fees")
     try:
-        fees = db.query(Fees).first()
-        if not fees:
+        # Return canonical set of fee rows as a mapping code -> amount
+        fee_rows = db.query(Fee).all()
+        if not fee_rows:
             raise HTTPException(status_code=404, detail="Fees not found")
-        return fees
+
+        mapping = {f.code.upper(): f.amount for f in fee_rows}
+        total = sum(mapping.values())
+
+        return FeesResponse(fees=mapping, total=total)
     except Exception as e:
         logger.error(f"Error fetching fees: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.put("/update", response_model=FeesResponse)
-def update_fees(fees: FeesBase, db: Session = Depends(get_db)):
-    db_fees = Fees(**fees.model_dump())
-    db.add(db_fees)
-    db.commit() 
-    db.refresh(db_fees)
-    return db_fees
+def update_fees(fee_updates: Dict[str, float], db: Session = Depends(get_db)):
+    # Upsert fee components provided as a mapping code->amount in request body
+    try:
+        created_or_updated = []
+        for code, amount in fee_updates.items():
+            code_up = code.upper()
+            # Derive a friendly name from the code if name isn't provided
+            friendly_name = code_up.replace("_", " ").title()
+            fee_row = db.query(Fee).filter(Fee.code == code_up).first()
+            if fee_row:
+                fee_row.amount = amount
+                fee_row.name = friendly_name
+            else:
+                fee_row = Fee(
+                    id=str(uuid4()),
+                    code=code_up,
+                    name=friendly_name,
+                    amount=amount,
+                )
+                db.add(fee_row)
+            created_or_updated.append(fee_row)
+
+        db.commit()
+
+        # Return the current mapping after update
+        fee_rows = db.query(Fee).all()
+        mapping = {f.code.upper(): f.amount for f in fee_rows}
+        total = sum(mapping.values())
+        return FeesResponse(fees=mapping, total=total)
+    except Exception as e:
+        logger.error(f"Error updating fees: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error while updating fees")
 
 @router.post("/calculate-fees", response_model=DetailedFeeCalculationResponse)
-async def calculate_fees(
+async def calculate_fees_endpoint(
     student_ids: List[str],
-    student_club_ids: dict[str, List[str]],
+    student_club_ids: Dict[str, List[str]],
     db: Session = Depends(get_db)
 ):
     try:
-        # Get base fees
-        base_fees = db.query(Fees).first()
-        if not base_fees:
-            raise HTTPException(status_code=404, detail="Base fees not found")
-
-        total_amount = 0
-        student_fees: List[StudentFeeDetail] = []
-
-        for student_id in student_ids:
-            student = db.query(Student).filter(Student.id == student_id).first()
-            if not student:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Student with id {student_id} not found"
-                )
-
-            # Get clubs for this student
-            club_list = []
-            club_fees_total = 0
-            student_club_ids_str = str(student_id)
-            if student_club_ids_str in student_club_ids:
-                for club_id in student_club_ids[student_club_ids_str]:
-                    club = db.query(Club).filter(Club.id == club_id).first()
-                    if club:
-                        club_fees_total += club.price
-                        club_list.append(ClubInfo(
-                            id=club.id,
-                            name=club.name,
-                            price=club.price
-                        ))
-
-            # Calculate subtotal (base fees + club fees)
-            subtotal = (
-                base_fees.tuition +
-                base_fees.boarding +
-                base_fees.utility +
-                base_fees.prize_giving_day +
-                base_fees.year_book +
-                base_fees.offering_and_hairs +
-                club_fees_total
-            )
-
-            # Calculate discounts (removed as student model no longer has discount fields)
-            discount_amount = 0
-            discount_percentage = 0
-            percentage_discount_amount = 0
-
-            # Calculate final amount
-            final_amount = subtotal
-
-            # Create fee breakdown
-            fee_breakdown = FeeBreakdown(
-                tuition=base_fees.tuition,
-                boarding=base_fees.boarding,
-                utility=base_fees.utility,
-                prize_giving_day=base_fees.prize_giving_day,
-                year_book=base_fees.year_book,
-                offering_and_hairs=base_fees.offering_and_hairs,
-                club_fees=club_list,
-                subtotal=subtotal,
-                final_amount=final_amount
-            )
-
-            student_fees.append(StudentFeeDetail(
-                student_id=student.id,
-                student_name=f"{student.first_name} {student.last_name}",
-                fee_breakdown=fee_breakdown
-            ))
-
-            total_amount += final_amount
-
-        return DetailedFeeCalculationResponse(
-            total_amount=total_amount,
-            student_fees=student_fees
+        return await calculate_fees_service(
+            student_ids=student_ids,
+            student_club_ids=student_club_ids,
+            db=db,
         )
 
     except HTTPException:

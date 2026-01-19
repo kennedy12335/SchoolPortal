@@ -3,12 +3,13 @@ Admin Analytics Router - Provides analytics endpoints for the admin dashboard.
 """
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, case
+from sqlalchemy import func, and_, case, or_
 from typing import List, Optional
 from pydantic import BaseModel
 from ..database import get_db
 from ..models.student import Student
-from ..models.payment import Payment, PaymentStatus, ExamPayment, StudentExamPaymentStatus
+from ..models.payment import Payment, PaymentItem, PaymentStatus, PaymentType, ExamPayment
+from ..models.student_exam_fee import StudentExamFee
 from ..models.club import Club, ClubMembership
 from ..models.fees import ExamFees
 from ..models.classes import YearGroup, ClassName
@@ -370,6 +371,11 @@ def get_exam_fees_overview(response: Response, db: Session = Depends(get_db)):
                 students_by_year_group[yg.name] = count
 
         total_students = db.query(func.count(Student.id)).scalar() or 0
+        # Subquery that aggregates completed ExamPayment amounts per StudentExamFee
+        payments_subq = db.query(
+            ExamPayment.student_exam_fee_id.label('sef_id'),
+            func.coalesce(func.sum(ExamPayment.amount), 0).label('paid')
+        ).filter(ExamPayment.status == PaymentStatus.COMPLETED).group_by(ExamPayment.student_exam_fee_id).subquery()
 
         exam_summaries = []
         for exam in exams:
@@ -380,24 +386,33 @@ def get_exam_fees_overview(response: Response, db: Session = Depends(get_db)):
             else:
                 applicable_count = total_students
 
-            # Get payment statistics in one query
+            # Get payment statistics accounting for partial payments by aggregating ExamPayment amounts
             payment_stats = db.query(
-                func.count(StudentExamPaymentStatus.id).label('total'),
-                func.sum(case((StudentExamPaymentStatus.is_fully_paid == True, 1), else_=0)).label('fully_paid'),
-                func.sum(case((and_(StudentExamPaymentStatus.is_fully_paid == False, StudentExamPaymentStatus.amount_due < exam.amount), 1), else_=0)).label('partially_paid'),
-                func.coalesce(func.sum(case((StudentExamPaymentStatus.is_fully_paid == True, exam.amount - StudentExamPaymentStatus.amount_due), else_=0)), 0).label('collected')
-            ).filter(
-                StudentExamPaymentStatus.exam_id == exam.id
+                func.count(StudentExamFee.id).label('total'),
+                func.sum(case(
+                    (payments_subq.c.paid >= (StudentExamFee.amount * (1 - StudentExamFee.discount_percentage / 100)), 1),
+                    else_=0
+                )).label('fully_paid'),
+                func.sum(case(
+                    (and_(payments_subq.c.paid > 0, payments_subq.c.paid < (StudentExamFee.amount * (1 - StudentExamFee.discount_percentage / 100))), 1),
+                    else_=0
+                )).label('partial'),
+                func.coalesce(func.sum(payments_subq.c.paid), 0).label('collected')
+            ).outerjoin(payments_subq, payments_subq.c.sef_id == StudentExamFee.id).filter(
+                StudentExamFee.exam_fee_id == exam.id
             ).first()
 
             total_registered = payment_stats.total or 0
-            fully_paid = payment_stats.fully_paid or 0
-            partially_paid = payment_stats.partially_paid or 0
+            fully_paid = int(payment_stats.fully_paid or 0)
+            partially_paid = int(payment_stats.partial or 0)
             unpaid = total_registered - fully_paid - partially_paid
             total_collected = payment_stats.collected or 0.0
 
-            # Calculate amounts
-            total_expected = total_registered * exam.amount
+            # Compute expected amount as sum of discounted amounts (accounts for per-student discounts)
+            total_expected = db.query(
+                func.coalesce(func.sum(StudentExamFee.amount * (1 - StudentExamFee.discount_percentage / 100)), 0)
+            ).filter(StudentExamFee.exam_fee_id == exam.id).scalar() or 0.0
+
             collection_rate = (total_collected / total_expected * 100) if total_expected > 0 else 0
 
             exam_summaries.append(ExamPaymentSummary(
@@ -436,78 +451,75 @@ def get_exam_students(
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    """Get list of students for a specific exam with payment details and pagination."""
     try:
-        exam = db.query(ExamFees).filter(ExamFees.id == exam_id).first()
-        if not exam:
-            raise HTTPException(status_code=404, detail="Exam not found")
-
-        # Build query with JOIN to get student data efficiently
-        query = db.query(StudentExamPaymentStatus, Student).join(
-            Student, StudentExamPaymentStatus.student_id == Student.id
+        # Aggregate completed payments per StudentExamFee
+        payments_subq = db.query(
+            ExamPayment.student_exam_fee_id.label("sef_id"),
+            func.coalesce(func.sum(ExamPayment.amount), 0).label("paid"),
         ).filter(
-            StudentExamPaymentStatus.exam_id == exam_id
+            ExamPayment.status == PaymentStatus.COMPLETED
+        ).group_by(
+            ExamPayment.student_exam_fee_id
+        ).subquery()
+
+        discount_pct = func.coalesce(StudentExamFee.discount_percentage, 0)
+        amount_due_expr = StudentExamFee.amount * (1 - (discount_pct / 100))
+        amount_paid_expr = func.coalesce(payments_subq.c.paid, 0)
+
+        # Base query (join Student + StudentExamFee + aggregated payments)
+        query = db.query(
+            StudentExamFee,
+            Student,
+            amount_due_expr.label("amount_due"),
+            amount_paid_expr.label("amount_paid"),
+        ).join(
+            Student, Student.id == StudentExamFee.student_id
+        ).outerjoin(
+            payments_subq, payments_subq.c.sef_id == StudentExamFee.id
+        ).filter(
+            StudentExamFee.exam_fee_id == exam_id
         )
 
-        # Apply year group filter at SQL level
         if year_group:
-            try:
-                yg_enum = YearGroup(year_group)
-                query = query.filter(Student.year_group == yg_enum)
-            except ValueError:
-                pass
+            query = query.filter(Student.year_group == year_group)
 
-        # Apply search filter at SQL level
         if search:
-            search_term = f"%{search.lower()}%"
+            like = f"%{search.strip()}%"
             query = query.filter(
-                (func.lower(Student.first_name).like(search_term)) |
-                (func.lower(Student.last_name).like(search_term)) |
-                (func.lower(Student.reg_number).like(search_term))
+                or_(
+                    Student.first_name.ilike(like),
+                    Student.last_name.ilike(like),
+                    Student.reg_number.ilike(like),
+                )
             )
 
-        # Get all matching records
-        records = query.all()
+        # Payment status filter using the same due/paid logic as overview
+        if payment_status == "paid":
+            query = query.filter(amount_paid_expr >= amount_due_expr)
+        elif payment_status == "partial":
+            query = query.filter(and_(amount_paid_expr > 0, amount_paid_expr < amount_due_expr))
+        elif payment_status == "unpaid":
+            query = query.filter(amount_paid_expr <= 0)
 
-        # Apply payment status filter (requires computing amount_paid)
-        result = []
-        for ps, student in records:
-            amount_paid = exam.amount - ps.amount_due
+        total = query.count()
+        rows = query.offset(offset).limit(limit).all()
 
-            # Apply payment status filter
-            if payment_status == "paid" and not ps.is_fully_paid:
-                continue
-            if payment_status == "partial" and (ps.is_fully_paid or amount_paid == 0):
-                continue
-            if payment_status == "unpaid" and (ps.is_fully_paid or amount_paid > 0):
-                continue
-
-            result.append(StudentExamInfo(
+        items = []
+        for sef, student, amount_due, amount_paid in rows:
+            items.append(StudentExamInfo(
                 student_id=student.id,
                 reg_number=student.reg_number,
                 first_name=student.first_name,
                 last_name=student.last_name,
                 year_group=student.year_group.value if student.year_group else "Unknown",
                 class_name=student.class_name.value if student.class_name else "Unknown",
-                amount_due=ps.amount_due,
-                amount_paid=amount_paid,
-                is_fully_paid=ps.is_fully_paid
+                amount_due=float(amount_due or 0.0),
+                amount_paid=float(amount_paid or 0.0),
+                is_fully_paid=(float(amount_paid or 0.0) >= float(amount_due or 0.0)),
             ))
 
-        # Get total count after all filters
-        total = len(result)
+        return PaginatedStudentExamInfo(items=items, total=total, limit=limit, offset=offset)
 
-        # Apply pagination
-        paginated_result = result[offset:offset + limit]
-
-        return PaginatedStudentExamInfo(
-            items=paginated_result,
-            total=total,
-            limit=limit,
-            offset=offset
-        )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error getting exam students: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -663,15 +675,22 @@ def get_dashboard_overview(response: Response, db: Session = Depends(get_db)):
         # Get all counts in efficient queries
         total_students = db.query(func.count(Student.id)).scalar() or 0
 
-        # School fees - get distinct paid students and total collected
+        # School fees - count payments and sum SCHOOL_FEES payment items (avoids counting club share)
         school_fees_stats = db.query(
-            func.coalesce(func.sum(Payment.amount), 0).label('total'),
             func.count(Payment.id).label('payment_count')
         ).filter(
             Payment.status == PaymentStatus.COMPLETED
         ).first()
 
-        total_school_fees = school_fees_stats.total or 0.0
+        total_school_fees = (
+            db.query(func.coalesce(func.sum(PaymentItem.amount), 0.0))
+            .join(Payment, Payment.id == PaymentItem.payment_id)
+            .filter(
+                Payment.status == PaymentStatus.COMPLETED,
+                PaymentItem.item_type == PaymentType.SCHOOL_FEES,
+            )
+            .scalar()
+        )
 
         # Count distinct students who paid by collecting from all completed payments
         completed_payments = db.query(Payment.student_ids).filter(
@@ -688,33 +707,30 @@ def get_dashboard_overview(response: Response, db: Session = Depends(get_db)):
 
         school_fees_rate = (paid_students / total_students * 100) if total_students > 0 else 0
 
-        # Exam fees - single query for all stats
+        # Exam fees - query StudentExamFee for registrations and payments
         exam_stats = db.query(
-            func.count(func.distinct(StudentExamPaymentStatus.student_id)).label('registrations'),
-            func.coalesce(func.sum(ExamPayment.amount_paid), 0).label('total_collected')
-        ).outerjoin(
-            ExamPayment,
-            and_(StudentExamPaymentStatus.student_id == ExamPayment.student_id,
-                 StudentExamPaymentStatus.exam_id == ExamPayment.exam_id)
-        ).filter(
-            ExamPayment.status == PaymentStatus.COMPLETED
+            func.count(func.distinct(StudentExamFee.student_id)).label('registrations'),
+            func.coalesce(func.sum(case((StudentExamFee.paid == True, StudentExamFee.amount * (1 - StudentExamFee.discount_percentage / 100)), else_=0)), 0).label('total_collected')
         ).first()
 
         total_exam_registrations = exam_stats.registrations or 0
         total_exam_fees = exam_stats.total_collected or 0.0
 
-        # Club memberships with revenue - single query
-        club_stats = db.query(
-            func.count(func.distinct(ClubMembership.id)).label('confirmed_count'),
-            func.coalesce(func.sum(Club.price), 0).label('revenue')
-        ).join(
-            Club, ClubMembership.club_id == Club.id
-        ).filter(
-            ClubMembership.payment_confirmed == True
-        ).first()
+        # Club revenue: sum CLUB_FEES payment items (accurate split from combined payments)
+        club_revenue = (
+            db.query(func.coalesce(func.sum(PaymentItem.amount), 0.0))
+            .join(Payment, Payment.id == PaymentItem.payment_id)
+            .filter(
+                Payment.status == PaymentStatus.COMPLETED,
+                PaymentItem.item_type == PaymentType.CLUB_FEES,
+            )
+            .scalar()
+        )
 
-        total_club_memberships = club_stats.confirmed_count or 0
-        club_revenue = club_stats.revenue or 0.0
+        # Membership count still comes from club memberships
+        total_club_memberships = db.query(func.count(func.distinct(ClubMembership.id))).filter(
+            ClubMembership.payment_confirmed == True
+        ).scalar() or 0
 
         # Cache for 5 minutes on client side
         response.headers["Cache-Control"] = "public, max-age=300"

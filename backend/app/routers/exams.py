@@ -5,7 +5,8 @@ import time
 from tkinter import N
 
 import requests
-from ..models.payment import ExamPayment, PaymentStatus, StudentExamPaymentStatus
+from ..models.payment import ExamPayment, PaymentStatus
+from ..models.student_exam_fee import StudentExamFee
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -58,9 +59,10 @@ class ExamResponse(BaseModel):
     allows_installments: bool = False
     applicable_grades: list[str] | None = None  # List of YearGroup enum names
 
-class StudentExamPaymentStatusCreate(BaseModel):
+class StudentExamFeeCreate(BaseModel):
     student_id: str
     exam_id: str
+    discount_percentage: Optional[float] = 0.0
 
 class ExamPaymentStatusResponse(BaseModel):
     exam_id: str
@@ -219,8 +221,8 @@ async def verify_payment_status(payment_reference: str, db: Session = Depends(ge
 @router.get("/get-student-exam-list", response_model=StudentExamPaymentStatusResponse)
 def get_student_exam_list(student_id: str, db: Session = Depends(get_db)):
     logger.info(f"Getting student exam list for student: {student_id}")
-    student_exam_list = db.query(StudentExamPaymentStatus).filter(StudentExamPaymentStatus.student_id == student_id).all()
-    if len(student_exam_list) == 0:
+    student_exam_fees = db.query(StudentExamFee).filter(StudentExamFee.student_id == student_id).all()
+    if len(student_exam_fees) == 0:
         logger.info(f"Student exam list is empty")
         return StudentExamPaymentStatusResponse(
         id=None,
@@ -230,31 +232,37 @@ def get_student_exam_list(student_id: str, db: Session = Depends(get_db)):
         exam_list=[]
     ) 
     
-    logger.info(f"Student exam list: {student_exam_list}")
+    logger.info(f"Student exam fees: {student_exam_fees}")
     student = db.query(Student).filter(Student.id == student_id).first()
     logger.info(f"Student: {student}")
 
     exam_list = []
-    for exam in student_exam_list:
-        exam_fees = db.query(ExamFees).filter(ExamFees.id == exam.exam_id).first()
+    for student_exam_fee in student_exam_fees:
+        exam_fees = db.query(ExamFees).filter(ExamFees.id == student_exam_fee.exam_fee_id).first()
         if exam_fees is None:
             raise HTTPException(status_code=404, detail="Exam fees not found")
         logger.info(f"Exam fees: {exam_fees}")
+        
+        # Calculate amount paid and amount due
+        discounted_amount = exam_fees.amount * (1 - student_exam_fee.discount_percentage / 100)
+        amount_paid = discounted_amount if student_exam_fee.paid else 0
+        amount_due = 0 if student_exam_fee.paid else discounted_amount
+        
         exam_list.append(ExamPaymentStatusResponse(
-            exam_id=exam.exam_id,
+            exam_id=student_exam_fee.exam_fee_id,
             exam_name=exam_fees.exam_name,
             exam_price=exam_fees.amount,
             extra_fees=exam_fees.extra_fees,
-            amount_paid=exam_fees.amount-exam.amount_due,
-            amount_due=exam.amount_due,
-            is_fully_paid=exam.is_fully_paid))
+            amount_paid=amount_paid,
+            amount_due=amount_due,
+            is_fully_paid=student_exam_fee.paid))
         logger.info(f"Exam list: {exam_list}")
         
     return StudentExamPaymentStatusResponse(
-        id=student_exam_list[0].id,
+        id=student_exam_fees[0].id,
         year_group=student.year_group.value if student.year_group else None,
         class_name=student.class_name.value if student.class_name else None,
-        student_id=student_exam_list[0].student_id,
+        student_id=student_exam_fees[0].student_id,
         exam_list=exam_list
     )
 

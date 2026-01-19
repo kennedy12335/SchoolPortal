@@ -1,13 +1,17 @@
 import logging
 import os
+from uuid import uuid4
 import requests
-from typing import List, Dict, Optional, Union
+from typing import Any, List, Dict, Optional, Union
+from ..models.student_exam_fee import StudentExamFee
 from sqlalchemy.orm import Session
 from ..models.payment import Payment, PaymentStatus, ExamPayment
 from ..models.student import Student
 from ..models.club import ClubMembership
 from ..models.fees import ExamFees
 from ..models.parent import Parent
+from ..models.fee import Fee
+from ..models.student_fee import StudentFee
 from fastapi import HTTPException
 from dotenv import load_dotenv
 
@@ -398,8 +402,22 @@ def _create_school_fees_records(payment_data: SchoolFeesPaymentData, payment_ref
     logger.debug(f"Students: {payment_data.student_ids}, Amount: {payment_data.amount}, Parent ID: {payment_data.parent_id}")
 
     try:
-        # Create payment record
-        logger.debug("Creating main payment record")
+        # Determine linked_student_fee_ids first to avoid creating a payment with an empty placeholder
+        linked_student_fee_ids: List[str] = []
+        # Use provided student_fee_ids if available, otherwise fetch base StudentFee rows for each student
+        if payment_data.student_fee_ids:
+            logger.debug(f"Using provided student_fee_ids: {payment_data.student_fee_ids}")
+            linked_student_fee_ids = payment_data.student_fee_ids
+        else:
+            logger.debug("No student_fee_ids provided, fetching fee rows from DB dynamically")
+            # Link all StudentFee rows for the provided student_ids in a single query
+            sf_ids_rows = db.query(StudentFee.id).filter(
+                StudentFee.student_id.in_(payment_data.student_ids)
+            ).all()
+            linked_student_fee_ids = [sf_id for (sf_id,) in sf_ids_rows]
+
+        # Create payment record with the computed student_fee_ids
+        logger.debug("Creating main payment record with linked student_fee_ids")
         db_payment = Payment(
             student_ids=payment_data.student_ids,
             amount=payment_data.amount,
@@ -407,6 +425,7 @@ def _create_school_fees_records(payment_data: SchoolFeesPaymentData, payment_ref
             description=payment_data.description,
             payment_reference=payment_reference,
             payer_id=payment_data.parent_id,
+            student_fee_ids=linked_student_fee_ids,
             status=PaymentStatus.PENDING
         )
         db.add(db_payment)
@@ -417,24 +436,28 @@ def _create_school_fees_records(payment_data: SchoolFeesPaymentData, payment_ref
 
         # Update student club memberships
         total_club_memberships = 0
+        logger.debug("Fetching all target students in a single query for club memberships")
+        students = db.query(Student).filter(Student.id.in_(payment_data.student_ids)).all()
+        existing_student_ids = {s.id for s in students}
+        new_memberships: List[ClubMembership] = []
+
         for student_id in payment_data.student_ids:
             logger.debug(f"Processing club memberships for student {student_id}")
-            student = db.query(Student).filter(Student.id == student_id).first()
-            if student:
+            if student_id in existing_student_ids:
                 club_ids = payment_data.student_club_ids.get(str(student_id), [])
                 logger.debug(f"Student {student_id} has {len(club_ids)} club memberships: {club_ids}")
-                
                 for club_id in club_ids:
-                    club_membership = ClubMembership(
+                    new_memberships.append(ClubMembership(
                         student_id=student_id,
                         club_id=club_id,
-                        payment_confirmed=False  # Will be updated to True when payment is confirmed
-                    )
-                    db.add(club_membership)
+                        payment_confirmed=False
+                    ))
                     total_club_memberships += 1
-                    logger.debug(f"Created club membership: Student {student_id} -> Club {club_id}")
             else:
                 logger.warning(f"Student with ID {student_id} not found in database")
+
+        if new_memberships:
+            db.add_all(new_memberships)
         
         db.commit()
         logger.info(f"School fees payment record created successfully. Payment ID: {db_payment.id}, Total club memberships: {total_club_memberships}")
@@ -445,35 +468,71 @@ def _create_school_fees_records(payment_data: SchoolFeesPaymentData, payment_ref
         raise
 
 def _create_exam_fees_records(payment_data: ExamFeesPaymentData, payment_reference: str, db: Session):
-    """Create database records for exam fees payment"""
-    logger.info(f"Creating exam fees records for payment reference: {payment_reference}")
-    logger.debug(f"Student: {payment_data.student_id}, Total amount: {payment_data.amount}, Exam payments: {len(payment_data.exam_payments)}, Parent ID: {payment_data.parent_id}")
+    """Create exam payment records for each exam in the payment data.
 
+    This function expects a typed `ExamFeesPaymentData` object for type safety.
+    """
     try:
-        # Create exam payment records for each exam
-        created_payments = []
-        for i, exam_payment_detail in enumerate(payment_data.exam_payments):
-            logger.debug(f"Creating exam payment record {i+1}/{len(payment_data.exam_payments)}: Exam {exam_payment_detail.exam_id}, Amount: {exam_payment_detail.amount_paid}")
-
+        # Use the typed schema directly
+        exam_payments = [
+            {
+                "student_id": payment_data.student_id,
+                "exam_id": ep.exam_id,
+                "amount": ep.amount_paid
+            }
+            for ep in payment_data.exam_payments
+        ]
+        payer_id = payment_data.parent_id
+        
+        for exam_payment in exam_payments:
+            exam_id = exam_payment["exam_id"]
+            student_id = exam_payment["student_id"]
+            amount = exam_payment["amount"]
+            
+            # Get or create StudentExamFee record
+            student_exam_fee = db.query(StudentExamFee).filter_by(
+                student_id=student_id,
+                exam_fee_id=exam_id
+            ).first()
+            
+            if not student_exam_fee:
+                # Create StudentExamFee if it doesn't exist
+                exam_fee = db.query(ExamFees).filter_by(id=exam_id).first()
+                if not exam_fee:
+                        logger.error(f"Exam fee not found: {exam_id}")
+                        # Surface the error to the caller so the entire payment fails
+                        # and the transaction rolls back, avoiding partial records.
+                        raise HTTPException(status_code=404, detail=f"Exam fee not found: {exam_id}")
+                    
+                student_exam_fee = StudentExamFee(
+                    id=str(uuid4()),
+                    student_id=student_id,
+                    exam_fee_id=exam_id,
+                    amount=amount,
+                    payment_reference=payment_reference,
+                    paid=False
+                )
+                db.add(student_exam_fee)
+                db.flush()
+            else:
+                # Update existing StudentExamFee
+                student_exam_fee.payment_reference = payment_reference
+                db.flush()
+            
+            # Create ExamPayment record
             db_exam_payment = ExamPayment(
-                exam_id=exam_payment_detail.exam_id,
-                student_id=payment_data.student_id,
-                amount_paid=exam_payment_detail.amount_paid,  # Use the specific amount for this exam
-                payment_method=payment_data.payment_method,  # Use the payment method from payment_data
+                id=str(uuid4()),
+                student_exam_fee_id=student_exam_fee.id,
+                amount_paid=amount,
+                status=PaymentStatus.PENDING,
                 payment_reference=payment_reference,
-                payer_id=payment_data.parent_id,
-                status=PaymentStatus.PENDING
+                payer_id=payer_id
             )
             db.add(db_exam_payment)
-            db.commit()
-            db.refresh(db_exam_payment)
-
-            created_payments.append(db_exam_payment.id)
-            logger.info(f"Exam payment record created with ID: {db_exam_payment.id} for exam {exam_payment_detail.exam_id}, linked to parent: {payment_data.parent_id}")
-
-        logger.info(f"Exam fees records created successfully. Payment reference: {payment_reference}, Created {len(created_payments)} exam payment records: {created_payments}")
         
+        db.commit()
+        logger.info(f"Created exam fees records for payment {payment_reference}")
     except Exception as e:
+        logger.error(f"Error creating exam fees records for payment {payment_reference}: {str(e)}")
         db.rollback()
-        logger.error(f"Error creating exam fees records for payment {payment_reference}: {e}")
-        raise 
+        raise

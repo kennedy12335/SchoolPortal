@@ -29,6 +29,8 @@ class SchoolFeesPaymentData(BaseModel):
     payment_method: str
     parent_id: str
     student_club_ids: Dict[str, List[str]]
+    # Make student_fee_ids present by default (empty list) so callers can rely on it.
+    student_fee_ids: List[str] = []
     description: str | None = None
 
 
@@ -37,6 +39,7 @@ class PaymentCreate(PaymentBase):
     payment_method: str
     parent_id: str
     student_club_ids: dict[str, List[str]]
+    student_fee_ids: List[str] = []
 
 
 class PaymentResponse(PaymentBase):

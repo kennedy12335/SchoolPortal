@@ -34,8 +34,7 @@ class ExamFees(BaseModel):
     allows_installments = Column(Boolean, default=False, nullable=False)
     applicable_grades = Column(JSON, nullable=True)  # Stores list of YearGroup names, e.g. ["YEAR_10", "YEAR_11", "YEAR_12"]
 
-    exam_payment = relationship("ExamPayment", back_populates="exam", cascade="all, delete-orphan")
-    student_exam_payment_status = relationship("StudentExamPaymentStatus", back_populates="exam_fee", cascade="all, delete-orphan")
+    student_exam_fees = relationship("StudentExamFee", back_populates="exam_fee", cascade="all, delete-orphan")
  
 
 

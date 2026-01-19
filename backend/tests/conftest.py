@@ -8,6 +8,9 @@ from app.models.student import Student
 from app.models.parent import Parent
 from app.models.club import Club, ClubMembership
 from app.models.fees import ExamFees
+from app.models.fee import Fee
+from app.models.student_fee import StudentFee
+from app.models.student_exam_fee import StudentExamFee
 from app.models.classes import YearGroup
 import os
 
@@ -106,51 +109,81 @@ def mock_club(test_db: Session):
 
 
 @pytest.fixture
-def mock_exam_fees(test_db: Session):
+def mock_exam_fees(test_db):
     """Create mock exam fees for testing"""
-    exams = []
-
-    # Create IGCSE exam
-    igcse = ExamFees(
-        id="exam-igcse-123",
-        exam_name="IGCSE Mathematics",
-        amount=150.0,
-        extra_fees=0.0,
-        allows_installments=False,
-        applicable_grades=["YEAR_10", "YEAR_11"]
-    )
-    test_db.add(igcse)
-    exams.append(igcse)
-
-    # Create SAT exam
-    sat = ExamFees(
-        id="exam-sat-456",
-        exam_name="SAT Reasoning Test",
-        amount=200.0,
-        extra_fees=0.0,
-        allows_installments=False,
-        applicable_grades=["YEAR_10", "YEAR_11", "YEAR_12"]
-    )
-    test_db.add(sat)
-    exams.append(sat)
-
-    # Create Checkpoint exam
-    checkpoint = ExamFees(
-        id="exam-checkpoint-789",
-        exam_name="Cambridge Checkpoint Science",
-        amount=100.0,
-        extra_fees=0.0,
-        allows_installments=False,
-        applicable_grades=["YEAR_8", "YEAR_9"]
-    )
-    test_db.add(checkpoint)
-    exams.append(checkpoint)
-
-    test_db.commit()
+    from app.models.fees import ExamFees
+    exams = [
+        ExamFees(
+            id="exam-igcse-123",
+            exam_name="IGCSE Mathematics",
+            amount=150000.0,
+            extra_fees=10000.0,
+            allows_installments=False,
+            applicable_grades=["YEAR_10", "YEAR_11"]
+        ),
+        ExamFees(
+            id="exam-sat-456",
+            exam_name="SAT Reasoning Test",
+            amount=200000.0,
+            extra_fees=15000.0,
+            allows_installments=True,
+            applicable_grades=["YEAR_12"]
+        )
+    ]
     for exam in exams:
-        test_db.refresh(exam)
+        test_db.add(exam)
+    test_db.commit()
+    return exams[0]  # Return first exam as default
 
-    return exams
+
+@pytest.fixture
+def mock_fees(test_db: Session):
+    """Create mock base fees for testing"""
+    fees_data = [
+        {"code": "TUITION", "name": "Tuition", "amount": 500000.0},
+        {"code": "BOARDING", "name": "Boarding", "amount": 200000.0},
+        {"code": "UTILITY", "name": "Utility", "amount": 50000.0},
+        {"code": "PRIZE_GIVING", "name": "Prize Giving Day", "amount": 15000.0},
+        {"code": "YEAR_BOOK", "name": "Year Book", "amount": 10000.0},
+        {"code": "OFFERING_HAIRS", "name": "Offering & Hairs", "amount": 5000.0},
+    ]
+    
+    fees = []
+    for fee_data in fees_data:
+        fee = Fee(
+            id=f"fee-{fee_data['code'].lower()}",
+            code=fee_data["code"],
+            name=fee_data["name"],
+            amount=fee_data["amount"],
+        )
+        test_db.add(fee)
+        fees.append(fee)
+    
+    test_db.commit()
+    for fee in fees:
+        test_db.refresh(fee)
+    return fees
+
+
+@pytest.fixture
+def mock_student_fees(test_db: Session, mock_student: Student, mock_fees: list):
+    """Create mock student fees for testing"""
+    student_fees = []
+    for fee in mock_fees:
+        student_fee = StudentFee(
+            id=f"sf-{mock_student.id}-{fee.code}",
+            student_id=mock_student.id,
+            fee_id=fee.id,
+            amount=fee.amount,
+            paid=False,
+        )
+        test_db.add(student_fee)
+        student_fees.append(student_fee)
+    
+    test_db.commit()
+    for sf in student_fees:
+        test_db.refresh(sf)
+    return student_fees
 
 
 @pytest.fixture
@@ -220,3 +253,21 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("sat_account", "ACCT_sat101")
     monkeypatch.setenv("school_fees_success_callback_url", "https://example.com/callback/school-fees")
     monkeypatch.setenv("exam_success_callback_url", "https://example.com/callback/exam-fees")
+
+
+@pytest.fixture
+def mock_exam(test_db):
+    """Create a single mock exam fee for testing"""
+    from app.models.fees import ExamFees
+    exam = ExamFees(
+        id="exam-igcse-123",
+        exam_name="IGCSE Mathematics",
+        amount=150000.0,
+        extra_fees=10000.0,
+        allows_installments=False,
+        applicable_grades=["YEAR_10", "YEAR_11"]
+    )
+    test_db.add(exam)
+    test_db.commit()
+    test_db.refresh(exam)
+    return exam

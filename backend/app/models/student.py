@@ -23,5 +23,5 @@ class Student(BaseModel):
         back_populates="students"
     )
     club_memberships = relationship("ClubMembership", back_populates="student")
-    exam_payment = relationship("ExamPayment", back_populates="student", cascade="all, delete-orphan")
-    student_exam_payment_status = relationship("StudentExamPaymentStatus", back_populates="student", cascade="all, delete-orphan")
+    student_fees = relationship("StudentFee", back_populates="student", cascade="all, delete-orphan")
+    student_exam_fees = relationship("StudentExamFee", back_populates="student", cascade="all, delete-orphan")

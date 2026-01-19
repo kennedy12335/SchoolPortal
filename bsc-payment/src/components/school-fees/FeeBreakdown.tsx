@@ -32,14 +32,11 @@ const FeeBreakdown: React.FC<FeeBreakdownProps> = ({
             </div>
 
             <div className="space-y-2 text-sm">
-              {/* Base fees */}
+              {/* Base fees (dynamic) */}
               <div className="space-y-1.5 text-muted-foreground">
-                <FeeItem label="Tuition" amount={fee.fee_breakdown.tuition} />
-                <FeeItem label="Boarding" amount={fee.fee_breakdown.boarding} />
-                <FeeItem label="Utility & Maintenance" amount={fee.fee_breakdown.utility} />
-                <FeeItem label="Speech & Prize Giving" amount={fee.fee_breakdown.prize_giving_day} />
-                <FeeItem label="Year Book" amount={fee.fee_breakdown.year_book} />
-                <FeeItem label="Offering & Hair" amount={fee.fee_breakdown.offering_and_hairs} />
+                {Object.entries(fee.fee_breakdown.fees ?? {}).map(([label, value]) => (
+                  <FeeItem key={label} label={label} amount={Number(value) || 0} />
+                ))}
               </div>
 
               {/* Club fees */}

@@ -85,18 +85,14 @@ export interface Fees {
 }
 
 export interface FeeBreakdown{
-    tuition: number
-    boarding: number
-    utility: number
-    prize_giving_day: number
-    year_book: number
-    offering_and_hairs: number
-    club_fees: Club[]
-    subtotal: number
-    discount_amount: number
-    discount_percentage: number
-    percentage_discount_amount: number
-    final_amount: number
+  // Dynamic fees map: key is fee name/code, value is amount
+  fees: Record<string, number>
+  club_fees: Club[]
+  subtotal: number
+  discount_amount: number
+  discount_percentage: number
+  percentage_discount_amount: number
+  final_amount: number
 }
 
 
@@ -109,6 +105,38 @@ export interface StudentFeeDetail{
 export interface CalculatedFees{
   total_amount: number
   student_fees: StudentFeeDetail[]
+}
+
+// ============ Normalized Fee Types ============
+
+export interface Fee {
+  id: string;
+  code: string;
+  name: string;
+  amount: number;
+  extra_fees: number;
+  description: string;
+}
+
+export interface StudentFee {
+  id: string;
+  student_id: string;
+  fee_id: string;
+  amount: number;
+  discount_percentage: number;
+  paid: boolean;
+  payment_reference: string | null;
+  fee: Fee;
+}
+
+export interface StudentExamFee {
+  id: string;
+  student_id: string;
+  exam_fee_id: string;
+  amount: number;
+  discount_percentage: number;
+  paid: boolean;
+  payment_reference: string | null;
 }
 
 // ============ Admin Dashboard Types ============

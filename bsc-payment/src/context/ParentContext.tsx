@@ -14,7 +14,7 @@ interface ParentContextType {
 const ParentContext = createContext<ParentContextType | undefined>(undefined);
 
 // Mock parent ID for development - will be replaced with auth later
-const MOCK_PARENT_ID = "01a8013f-e2c2-48e0-a734-4f6186be6a73";
+const MOCK_PARENT_ID = "0147d859-e943-469d-8185-f11131b47225";
 
 interface ParentProviderProps {
   children: ReactNode;

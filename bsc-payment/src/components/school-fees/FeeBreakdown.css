@@ -1,0 +1,157 @@
+.fee-breakdown {
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fee-breakdown-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fee-breakdown-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.fee-breakdown-content {
+  padding: 1.5rem;
+  space-y: 1.5rem;
+}
+
+.fee-student-section {
+  margin-bottom: 1.5rem;
+}
+
+.fee-student-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fee-student-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.fee-student-total {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.fee-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.fee-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+
+.fee-item-label {
+  color: #6b7280;
+}
+
+.fee-item-amount {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.fee-item-highlight {
+  color: #4f46e5;
+  font-weight: 500;
+}
+
+.fee-section-divider {
+  margin: 0.75rem 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.fee-club-section {
+  margin: 1rem 0;
+}
+
+.fee-club-title {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.fee-discount-section {
+  color: #16a34a;
+  margin: 1rem 0;
+}
+
+.fee-discount-item {
+  color: #16a34a;
+}
+
+.fee-subtotal {
+  font-weight: 600;
+  color: #1f2937;
+  padding: 0.75rem 0;
+}
+
+.fee-final-amount {
+  font-weight: 700;
+  color: #1f2937;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.fee-grand-total {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fee-grand-total-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.fee-grand-total-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+/* Responsive styling */
+@media (max-width: 768px) {
+  .fee-breakdown-header,
+  .fee-breakdown-content {
+    padding: 1rem;
+  }
+
+  .fee-breakdown-title {
+    font-size: 1.125rem;
+  }
+
+  .fee-student-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .fee-grand-total {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

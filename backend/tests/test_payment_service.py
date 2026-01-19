@@ -21,6 +21,7 @@ from app.schemas.payment import (
 )
 from app.models.payment import PaymentStatus, Payment, ExamPayment
 from app.models.club import ClubMembership
+from app.models.student_exam_fee import StudentExamFee
 
 
 class TestInitializeSplitPayment:
@@ -592,54 +593,59 @@ class TestCreateExamFeesRecords:
     """Test suite for _create_exam_fees_records function"""
 
     def test_create_exam_fees_records_success(
-        self, test_db, mock_parent, mock_student, mock_exam_fees
+        self, test_db, mock_student, mock_exam
     ):
-        """Test successful creation of exam fees payment records"""
+        """Test creating exam fees records successfully"""
         payment_data = ExamFeesPaymentData(
-            exam_payments=[
-                ExamPaymentDetails(exam_id="exam-igcse-123", amount_paid=150.0),
-                ExamPaymentDetails(exam_id="exam-sat-456", amount_paid=200.0)
-            ],
-            student_id="student-123",
-            amount=350.0,
+            exam_payments=[ExamPaymentDetails(exam_id=mock_exam.id, amount_paid=150000.0)],
+            student_id=mock_student.id,
+            amount=150000.0,
             payment_method="paystack",
-            parent_id="parent-123"
+            parent_id="parent_123"
         )
 
         _create_exam_fees_records(payment_data, "exam_ref_123", test_db)
-
-        # Verify exam payment records were created
-        exam_payments = test_db.query(ExamPayment).filter(
-            ExamPayment.payment_reference == "exam_ref_123"
-        ).all()
-        assert len(exam_payments) == 2
-        assert all(ep.status == PaymentStatus.PENDING for ep in exam_payments)
-        assert all(ep.payer_id == "parent-123" for ep in exam_payments)
-
-        # Verify correct amounts
-        amounts = sorted([ep.amount_paid for ep in exam_payments])
-        assert amounts == [150.0, 200.0]
+        
+        # Verify StudentExamFee was created
+        student_exam_fee = test_db.query(StudentExamFee).filter_by(
+            student_id=mock_student.id,
+            exam_fee_id=mock_exam.id
+        ).first()
+        assert student_exam_fee is not None
+        assert student_exam_fee.amount == 150000.0
+        
+        # Verify ExamPayment was created
+        exam_payment = test_db.query(ExamPayment).filter_by(
+            payment_reference="exam_ref_123"
+        ).first()
+        assert exam_payment is not None
+        assert exam_payment.student_exam_fee_id == student_exam_fee.id
+        assert exam_payment.amount_paid == 150000.0
+        assert exam_payment.status == PaymentStatus.PENDING
 
     def test_create_exam_fees_records_single_exam(
-        self, test_db, mock_parent, mock_student, mock_exam_fees
+        self, test_db, mock_student, mock_exam
     ):
-        """Test creation of exam fees records for a single exam"""
+        """Test creating exam fees records for a single exam"""
         payment_data = ExamFeesPaymentData(
-            exam_payments=[
-                ExamPaymentDetails(exam_id="exam-igcse-123", amount_paid=150.0)
-            ],
-            student_id="student-123",
-            amount=150.0,
+            exam_payments=[ExamPaymentDetails(exam_id=mock_exam.id, amount_paid=75000.0)],
+            student_id=mock_student.id,
+            amount=75000.0,
             payment_method="paystack",
-            parent_id="parent-123"
+            parent_id="parent_456"
         )
 
         _create_exam_fees_records(payment_data, "exam_ref_456", test_db)
-
-        # Verify single exam payment record
-        exam_payments = test_db.query(ExamPayment).filter(
-            ExamPayment.payment_reference == "exam_ref_456"
-        ).all()
-        assert len(exam_payments) == 1
-        assert exam_payments[0].amount_paid == 150.0
-        assert exam_payments[0].exam_id == "exam-igcse-123"
+        
+        # Verify records
+        student_exam_fee = test_db.query(StudentExamFee).filter_by(
+            student_id=mock_student.id,
+            exam_fee_id=mock_exam.id
+        ).first()
+        assert student_exam_fee is not None
+        
+        exam_payment = test_db.query(ExamPayment).filter_by(
+            payment_reference="exam_ref_456"
+        ).first()
+        assert exam_payment is not None
+        assert exam_payment.student_exam_fee_id == student_exam_fee.id

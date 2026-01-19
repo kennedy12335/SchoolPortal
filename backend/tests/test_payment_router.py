@@ -190,6 +190,7 @@ class TestGetPayments:
             payment_reference="ref_001",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.PENDING,
             description="Test payment 1"
         )
@@ -199,6 +200,7 @@ class TestGetPayments:
             payment_reference="ref_002",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.COMPLETED,
             description="Test payment 2"
         )
@@ -233,6 +235,7 @@ class TestGetPayment:
             payment_reference="ref_test",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.PENDING,
             description="Test payment"
         )
@@ -270,6 +273,7 @@ class TestVerifyPaymentStatus:
             payment_reference="ref_verify_test",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.PENDING
         )
         test_db.add(payment)
@@ -309,6 +313,7 @@ class TestVerifyPaymentStatus:
             payment_reference="ref_pending",
             payment_method="paystack",
             payer_id="parent-123",
+                student_fee_ids=[],
             status=PaymentStatus.PENDING
         )
         test_db.add(payment)
@@ -359,6 +364,7 @@ class TestVerifyPaymentStatus:
             payment_reference="ref_fallback",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.COMPLETED
         )
         test_db.add(payment)
@@ -399,6 +405,7 @@ class TestPaystackWebhook:
             payment_reference="webhook_ref_123",
             payment_method="paystack",
             payer_id="parent-123",
+            student_fee_ids=[],
             status=PaymentStatus.PENDING
         )
         test_db.add(payment)
@@ -449,7 +456,7 @@ class TestPaystackWebhook:
     @patch('app.routers.payment.verify_payment')
     @patch('app.routers.payment.update_exam_payment_records')
     def test_webhook_exam_fees_success(
-        self, mock_update_exam, mock_verify, client, test_db, mock_parent, mock_student, mock_env_vars
+        self, mock_update_exam, mock_verify, client, test_db, mock_parent, mock_student, mock_exam, mock_env_vars
     ):
         """Test successful webhook for exam fees payment"""
 
@@ -462,14 +469,25 @@ class TestPaystackWebhook:
         payment_router.dependency_overrides[get_db] = override_get_db
 
         # Create test exam payment
+        from app.models.student_exam_fee import StudentExamFee
+        
+        student_exam_fee = StudentExamFee(
+            id=str(uuid4()),
+            student_id=mock_student.id,
+            exam_fee_id=mock_exam.id,
+            amount=150000.0,
+            paid=False
+        )
+        test_db.add(student_exam_fee)
+        test_db.flush()
+        
         exam_payment = ExamPayment(
-            exam_id="exam-123",
-            student_id="student-123",
-            amount_paid=150.0,
-            payment_reference="exam_webhook_ref",
-            payment_method="paystack",
-            payer_id="parent-123",
-            status=PaymentStatus.PENDING
+            id=str(uuid4()),
+            student_exam_fee_id=student_exam_fee.id,
+            amount_paid=150000.0,
+            status=PaymentStatus.PENDING,
+            payment_reference="exam_ref_123",
+            payer_id=mock_parent.id
         )
         test_db.add(exam_payment)
         test_db.commit()

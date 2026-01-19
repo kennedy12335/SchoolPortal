@@ -1,5 +1,4 @@
-from ..models.fees import Fees
-from ..routers.fees import calculate_fees
+from ..services.fees_service import calculate_fees
 from fastapi import APIRouter, Depends, HTTPException, Request
 import hmac
 import hashlib
@@ -68,6 +67,7 @@ async def initialize_payment_endpoint(payment: PaymentCreate, db: Session = Depe
             payment_method=payment.payment_method,
             parent_id=payment.parent_id,
             student_club_ids=payment.student_club_ids,
+            student_fee_ids=payment.student_fee_ids,
             description=payment.description
         )
         
@@ -112,10 +112,14 @@ async def verify_payment_status(payment_reference: str, db: Session = Depends(ge
     try:
         paystack_response = verify_payment(payment_reference)
         if paystack_response["status"] and paystack_response["data"]["status"] == "success":
-            # Update local status if needed
-            if payment.status != PaymentStatus.COMPLETED:
-                payment.status = PaymentStatus.COMPLETED
-                db.commit()
+            # Update local status + related records + create payment items
+            await update_payment_records(
+                db,
+                payment,
+                payment.student_ids,
+                logger,
+                metadata=paystack_response.get("data", {}).get("metadata"),
+            )
             return {"status": "completed"}
         elif paystack_response["data"]["status"] == "pending":
             return {"status": "pending"}
@@ -176,7 +180,13 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)) -> D
                     payment = db.query(Payment).filter(Payment.payment_reference == reference).first()
                     if payment:
                         logger.info(f"Payment found")
-                        await update_payment_records(db, payment, payment.student_ids, logger)
+                        await update_payment_records(
+                            db,
+                            payment,
+                            payment.student_ids,
+                            logger,
+                            metadata=response.get("data", {}).get("metadata"),
+                        )
                         return {"status": "success"}
 
                 elif event['data']['metadata']['payment_type'] == 'exam_fees':

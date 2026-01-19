@@ -27,6 +27,8 @@ from app.models.student import Student
 from app.models.parent import Parent, parent_student_association
 from app.models.club import Club, ClubMembership
 from app.models.classes import YearGroup, ClassName
+from app.models.fee import Fee
+from app.models.student_fee import StudentFee
 
 
 # Sample names for generating realistic data
@@ -78,6 +80,16 @@ CLUB_DATA = [
     {"name": "Science Club", "description": "Experiments, science fairs, and STEM activities", "price": 10000.0, "capacity": 35},
     {"name": "Music Club", "description": "Choir, instruments, and music theory", "price": 18000.0, "capacity": 45},
     {"name": "Debate Club", "description": "Public speaking and debate competitions", "price": 7500.0, "capacity": 25},
+]
+
+# Fees data (base, fixed fees)
+FEES_DATA = [
+    {"code": "TUITION", "name": "Tuition", "amount": 500000.0, "description": "Annual tuition fee"},
+    {"code": "BOARDING", "name": "Boarding", "amount": 200000.0, "description": "Boarding accommodation"},
+    {"code": "UTILITY", "name": "Utility", "amount": 50000.0, "description": "Utilities and maintenance"},
+    {"code": "PRIZE_GIVING", "name": "Prize Giving Day", "amount": 15000.0, "description": "Prize giving day event"},
+    {"code": "YEAR_BOOK", "name": "Year Book", "amount": 10000.0, "description": "Annual yearbook"},
+    {"code": "OFFERING_HAIRS", "name": "Offering & Hairs", "amount": 5000.0, "description": "School offerings"},
 ]
 
 # Year groups to use (6 year groups for 600 students = 100 per year)
@@ -377,6 +389,41 @@ def seed_database(db: Session):
     print(f"  Created {len(clubs)} clubs:")
     for club in clubs:
         print(f"    - {club.name} (Capacity: {club.capacity}, Price: {club.price})")
+
+    # Create base fees
+    print("\nCreating base fees...")
+    fee_objects = []
+    for fee_data in FEES_DATA:
+        fee = Fee(
+            id=str(uuid4()),
+            code=fee_data["code"],
+            name=fee_data["name"],
+            amount=fee_data["amount"],
+            description=fee_data.get("description"),
+        )
+        db.add(fee)
+        fee_objects.append(fee)
+
+    db.flush()
+    print(f"  Created {len(fee_objects)} fees")
+
+    # Assign fees to all students as StudentFee rows
+    print("Assigning fees to students (creating StudentFee rows)...")
+    student_fee_count = 0
+    for student in student_objects:
+        for fee in fee_objects:
+            sf = StudentFee(
+                id=str(uuid4()),
+                student_id=student.id,
+                fee_id=fee.id,
+                amount=fee.amount,
+                paid=False,
+            )
+            db.add(sf)
+            student_fee_count += 1
+
+    db.flush()
+    print(f"  Created {student_fee_count} student_fee records for {len(student_objects)} students")
 
 
 
