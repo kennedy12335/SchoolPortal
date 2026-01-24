@@ -9,15 +9,9 @@ import LoadingSpinner from './shared/LoadingSpinner';
 import { CheckCircle, XCircle, Home, Printer } from 'lucide-react';
 import { FeeBreakdown } from '../types/types';
 
-interface Club {
-  name: string;
-  price: number;
-}
-
 interface StudentPayment {
   name: string;
   amount: number;
-  clubs: Club[];
   fee_breakdown: FeeBreakdown;
 }
 
@@ -50,7 +44,7 @@ const PaymentSuccess: React.FC = () => {
         try {
           const parsed = JSON.parse(storedDetails);
           if (typeof parsed.students === 'string') {
-            parsed.students = [{ name: parsed.students, amount: parsed.amount, clubs: [] }];
+            parsed.students = [{ name: parsed.students, amount: parsed.amount }];
           }
           setPaymentDetails(parsed);
         } catch (error) {
@@ -185,16 +179,6 @@ const PaymentSuccess: React.FC = () => {
                   {Object.entries(student.fee_breakdown.fees ?? {}).map(([label, value]) => (
                     <FeeRow key={label} label={label} amount={Number(value) || 0} />
                   ))}
-
-                  {student.clubs.length > 0 && (
-                    <>
-                      <Separator className="my-2" />
-                      <p className="font-medium text-primary">Club Fees:</p>
-                      {student.clubs.map((club, idx) => (
-                        <FeeRow key={idx} label={club.name} amount={club.price} highlight />
-                      ))}
-                    </>
-                  )}
 
                   {student.fee_breakdown.discount_amount > 0 && (
                     <>

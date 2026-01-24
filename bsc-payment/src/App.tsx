@@ -11,10 +11,8 @@ import PaymentSuccess from './components/PaymentSuccess';
 import ExamPaymentSuccess from './components/ExamPaymentSuccess';
 import AdminDashboard from './components/admin/AdminDashboard';
 import ExamManagement from './components/admin/ExamManagement';
-import ClubManagement from './components/admin/ClubManagement';
 import SchoolFeesAnalytics from './components/admin/SchoolFeesAnalytics';
 import ExamFeesAnalytics from './components/admin/ExamFeesAnalytics';
-import ClubMembershipAnalytics from './components/admin/ClubMembershipAnalytics';
 import './App.css';
 
 function App() {
@@ -27,10 +25,8 @@ function App() {
             {/* Admin routes - without main header */}
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/exams" element={<ExamManagement />} />
-            <Route path="/admin/clubs" element={<ClubManagement />} />
             <Route path="/admin/school-fees" element={<SchoolFeesAnalytics />} />
             <Route path="/admin/exam-fees" element={<ExamFeesAnalytics />} />
-            <Route path="/admin/club-memberships" element={<ClubMembershipAnalytics />} />
 
             {/* Main app routes with header */}
             <Route

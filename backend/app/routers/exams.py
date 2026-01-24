@@ -26,7 +26,10 @@ from ..services.payment_service import (
     ExamFeesPaymentData
 )
 from ..schemas.payment import (
-    ExamPaymentDetails
+    ExamPaymentDetails,
+    ExamPaymentReceipt,
+    ExamReceiptBreakdown,
+    ExamReceiptStudent,
 )
 
 load_dotenv()
@@ -218,6 +221,63 @@ async def verify_payment_status(payment_reference: str, db: Session = Depends(ge
         logger.error(f"Error verifying payment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/receipt/{payment_reference}", response_model=ExamPaymentReceipt)
+def get_exam_receipt(payment_reference: str, db: Session = Depends(get_db)):
+    payments = db.query(ExamPayment).filter(ExamPayment.payment_reference == payment_reference).all()
+    if not payments:
+        raise HTTPException(status_code=404, detail="Exam payment not found")
+
+    payer = payments[0].payer
+
+    # Collect StudentExamFee rows
+    student_exam_fee_ids = [p.student_exam_fee_id for p in payments]
+    sef_rows = db.query(StudentExamFee).filter(StudentExamFee.id.in_(student_exam_fee_ids)).all()
+    sef_map = {sef.id: sef for sef in sef_rows}
+
+    # Resolve student and exam details
+    student_id = None
+    if sef_rows:
+        student_id = sef_rows[0].student_id
+    student = db.query(Student).filter(Student.id == student_id).first() if student_id else None
+
+    exam_ids = [sef.exam_fee_id for sef in sef_rows]
+    exams = db.query(ExamFees).filter(ExamFees.id.in_(exam_ids)).all() if exam_ids else []
+    exams_by_id = {e.id: e for e in exams}
+
+    breakdown: list[ExamReceiptBreakdown] = []
+    for p in payments:
+        sef = sef_map.get(p.student_exam_fee_id)
+        if not sef:
+            continue
+        exam = exams_by_id.get(sef.exam_fee_id)
+        breakdown.append(
+            ExamReceiptBreakdown(
+                exam_id=sef.exam_fee_id,
+                exam_name=exam.exam_name if exam else "Exam",
+                amount_paid=float(p.amount_paid),
+                includes_textbook=False,
+                textbook_cost=0.0,
+            )
+        )
+
+    total_amount = round(sum(b.amount_paid + (b.textbook_cost or 0) for b in breakdown), 2)
+
+    return ExamPaymentReceipt(
+        reference=payment_reference,
+        amount=total_amount,
+        payment_method=payments[0].payment_method,
+        payer_name=f"{payer.first_name} {payer.last_name}" if payer else None,
+        payer_email=payer.email if payer else None,
+        payer_phone=payer.phone if payer else None,
+        student=ExamReceiptStudent(
+            student_id=student.id if student else "",
+            name=f"{student.first_name} {student.last_name}" if student else "",
+        ),
+        examBreakdown=breakdown,
+        created_at=payments[0].date_created.isoformat() if payments[0].date_created else None,
+    )
+
 @router.get("/get-student-exam-list", response_model=StudentExamPaymentStatusResponse)
 def get_student_exam_list(student_id: str, db: Session = Depends(get_db)):
     logger.info(f"Getting student exam list for student: {student_id}")
@@ -264,6 +324,58 @@ def get_student_exam_list(student_id: str, db: Session = Depends(get_db)):
         class_name=student.class_name.value if student.class_name else None,
         student_id=student_exam_fees[0].student_id,
         exam_list=exam_list
+    )
+
+
+@router.get("/receipt/{payment_reference}", response_model=ExamPaymentReceipt)
+def get_exam_payment_receipt(payment_reference: str, db: Session = Depends(get_db)):
+    exam_payments = db.query(ExamPayment).filter(ExamPayment.payment_reference == payment_reference).all()
+    if not exam_payments:
+        raise HTTPException(status_code=404, detail="Exam payment not found")
+
+    student_exam_fee_ids = [ep.student_exam_fee_id for ep in exam_payments]
+    student_exam_fees = db.query(StudentExamFee).filter(StudentExamFee.id.in_(student_exam_fee_ids)).all()
+    sef_map = {sef.id: sef for sef in student_exam_fees}
+
+    exam_ids = {sef.exam_fee_id for sef in student_exam_fees if sef.exam_fee_id}
+    exam_fee_map = {ef.id: ef for ef in db.query(ExamFees).filter(ExamFees.id.in_(exam_ids)).all()} if exam_ids else {}
+
+    # Assume all payments share the same student
+    student_id = student_exam_fees[0].student_id if student_exam_fees else None
+    student = db.query(Student).filter(Student.id == student_id).first() if student_id else None
+
+    exam_breakdown: list[ExamReceiptBreakdown] = []
+    total_amount = 0.0
+    for ep in exam_payments:
+        sef = sef_map.get(ep.student_exam_fee_id)
+        exam_fee = exam_fee_map.get(sef.exam_fee_id) if sef else None
+        amount_paid = float(ep.amount_paid)
+        total_amount += amount_paid
+        exam_breakdown.append(
+            ExamReceiptBreakdown(
+                exam_id=sef.exam_fee_id if sef else "",
+                exam_name=exam_fee.exam_name if exam_fee else "Exam",
+                amount_paid=amount_paid,
+                includes_textbook=False,
+                textbook_cost=0.0,
+            )
+        )
+
+    payer = exam_payments[0].payer
+
+    return ExamPaymentReceipt(
+        reference=payment_reference,
+        amount=round(total_amount, 2),
+        payment_method=exam_payments[0].payment_method,
+        payer_name=f"{payer.first_name} {payer.last_name}" if payer else None,
+        payer_email=payer.email if payer else None,
+        payer_phone=payer.phone if payer else None,
+        student=ExamReceiptStudent(
+            student_id=student.id if student else "",
+            name=f"{student.first_name} {student.last_name}" if student else "",
+        ),
+        examBreakdown=exam_breakdown,
+        created_at=exam_payments[0].date_created.isoformat() if exam_payments[0].date_created else None,
     )
 
 

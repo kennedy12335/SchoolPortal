@@ -1,7 +1,5 @@
 from typing import List
 
-from fastapi import HTTPException
-from ..models.club import ClubMembership
 from ..models.student import Student
 from ..models.fees import ExamFees
 from ..models.payment import ExamPayment, Payment, PaymentItem, PaymentStatus, PaymentType

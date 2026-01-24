@@ -7,26 +7,19 @@ import { useParent } from '../../context/ParentContext';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import StudentSelector from './StudentSelector';
-import ClubSelector from './ClubSelector';
 import FeeBreakdown from './FeeBreakdown';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
-import { Club, StudentFeeDetail, StudentFee, StudentExamFee } from '../../types/types';
+import { StudentFeeDetail, StudentFee, StudentExamFee } from '../../types/types';
 import FeeService from '../../services/feeService';
 import { ArrowLeft, CreditCard, Loader2, Users } from 'lucide-react';
-
-interface StudentClubSelection {
-  [studentId: string]: string[];
-}
 
 const SchoolFeesPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { parent, students, loading: parentLoading } = useParent();
 
-  const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [studentClubSelections, setStudentClubSelections] = useState<StudentClubSelection>({});
   const [studentFees, setStudentFees] = useState<StudentFeeDetail[]>([]);
   const [selectedStudentFeeIds, setSelectedStudentFeeIds] = useState<string[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
@@ -50,20 +43,6 @@ const SchoolFeesPage: React.FC = () => {
     }
   }, [students, location.state]);
 
-  // Fetch clubs
-  useEffect(() => {
-    const fetchClubs = async () => {
-      try {
-        const response = await axios.get(`${config.apiUrl}/api/clubs/`);
-        setClubs(response.data);
-      } catch (error) {
-        console.error('Error fetching clubs:', error);
-        toast.error('Failed to load clubs');
-      }
-    };
-    fetchClubs();
-  }, []);
-
   // Calculate fees when selection changes
   useEffect(() => {
     const calculateFees = async () => {
@@ -73,33 +52,11 @@ const SchoolFeesPage: React.FC = () => {
         return;
       }
 
-      // Check if all selected students have clubs selected
-      const allHaveClubs = selectedStudentIds.every(
-        id => studentClubSelections[id]?.length > 0
-      );
-
-      if (!allHaveClubs) {
-        setStudentFees([]);
-        setTotalAmount(0);
-        return;
-      }
-
       setIsCalculating(true);
       try {
-        console.log("=====")
-        console.log(studentClubSelections)
-        console.log("=====")
-        const studentClubIds: Record<string, string[]> = {};
-        selectedStudentIds.forEach(id => {
-          console.log(id)
-          studentClubIds[id] = studentClubSelections[id] || [];
-        });
-
-        console.log( studentClubIds)
-
         const response = await axios.post(`${config.apiUrl}/api/fees/calculate-fees`, {
           student_ids: selectedStudentIds,
-          student_club_ids: studentClubIds
+          student_club_ids: {}
         });
 
         setStudentFees(response.data.student_fees);
@@ -114,35 +71,14 @@ const SchoolFeesPage: React.FC = () => {
 
     const debounceTimer = setTimeout(calculateFees, 300);
     return () => clearTimeout(debounceTimer);
-  }, [selectedStudentIds, studentClubSelections]);
-
-  const handleClubChange = (studentId: string, clubIds: string[]) => {
-    setStudentClubSelections(prev => ({
-      ...prev,
-      [studentId]: clubIds
-    }));
-  };
+  }, [selectedStudentIds]);
 
   const handleStudentSelectionChange = (ids: string[]) => {
     setSelectedStudentIds(ids);
-    // Initialize club selections for newly selected students
-    ids.forEach(id => {
-      if (!studentClubSelections[id]) {
-        setStudentClubSelections(prev => ({
-          ...prev,
-          [id]: []
-        }));
-      }
-    });
   };
-
-  const allStudentsHaveClubs = selectedStudentIds.every(
-    id => studentClubSelections[id]?.length > 0
-  );
 
   const canSubmit =
     selectedStudentIds.length > 0 &&
-    allStudentsHaveClubs &&
     totalAmount > 0 &&
     !isSubmitting;
 
@@ -151,26 +87,12 @@ const SchoolFeesPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const studentClubIds: Record<string, string[]> = {};
-      selectedStudentIds.forEach(id => {
-        studentClubIds[id] = studentClubSelections[id] || [];
-      });
-
-      const clubAmount = studentFees.reduce(
-        (acc, fee) => acc + fee.fee_breakdown.club_fees.reduce((sum, club) => sum + club.price, 0),
-        0
-      );
-
       // Store payment details before API call
       const paymentDetails = {
         amount: totalAmount,
         students: studentFees.map(fee => ({
           name: fee.student_name,
           amount: fee.fee_breakdown.final_amount,
-          clubs: fee.fee_breakdown.club_fees.map(club => ({
-            name: club.name,
-            price: club.price
-          })),
           fee_breakdown: fee.fee_breakdown
         })),
         paymentMethod: 'Bank Transfer',
@@ -180,11 +102,9 @@ const SchoolFeesPage: React.FC = () => {
       const response = await axios.post(`${config.apiUrl}/api/payments/initialize`, {
         student_ids: selectedStudentIds,
         amount: totalAmount,
-        club_amount: clubAmount,
         parent_id: parent?.id,
         payment_method: 'bank_transfer',
         description: `Payment for ${selectedStudentIds.length} student(s)`,
-        student_club_ids: studentClubIds,
         student_fee_ids: selectedStudentFeeIds
       });
 
@@ -241,7 +161,7 @@ const SchoolFeesPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">School Fees Payment</h1>
           <p className="text-muted-foreground">
-            Select students and clubs to pay school fees
+            Select students to pay school fees
           </p>
         </div>
       </div>
@@ -259,28 +179,6 @@ const SchoolFeesPage: React.FC = () => {
               />
             </CardContent>
           </Card>
-
-          {/* Club Selection */}
-          {selectedStudentIds.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Select Clubs (Required - Max 2 per student)</h3>
-              {selectedStudentIds.map(studentId => {
-                const student = students.find(s => String(s.id) === studentId);
-                if (!student || student.school_fees_paid) return null;
-
-                return (
-                  <ClubSelector
-                    key={studentId}
-                    studentId={studentId}
-                    studentName={`${student.first_name} ${student.last_name}`}
-                    clubs={clubs}
-                    selectedClubIds={studentClubSelections[studentId] || []}
-                    onClubChange={handleClubChange}
-                  />
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {/* Right Column - Summary */}
@@ -303,14 +201,6 @@ const SchoolFeesPage: React.FC = () => {
           {selectedStudentIds.length > 0 && (
             <Card>
               <CardContent className="pt-6">
-                {!allStudentsHaveClubs && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800">
-                      Please select at least one club for each student to continue.
-                    </p>
-                  </div>
-                )}
-
                 <Button
                   className="w-full"
                   size="lg"

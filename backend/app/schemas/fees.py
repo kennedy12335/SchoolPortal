@@ -2,15 +2,8 @@ from pydantic import BaseModel
 from typing import Dict, List
 
 
-class ClubInfo(BaseModel):
-    id: str
-    name: str
-    price: float
-
-
 class FeeBreakdown(BaseModel):
     fees: Dict[str, float]
-    club_fees: List[ClubInfo]
     subtotal: float
     final_amount: float
 

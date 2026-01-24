@@ -10,7 +10,6 @@ from ..database import get_db
 from ..models.student import Student
 from ..models.payment import Payment, PaymentItem, PaymentStatus, PaymentType, ExamPayment
 from ..models.student_exam_fee import StudentExamFee
-from ..models.club import Club, ClubMembership
 from ..models.fees import ExamFees
 from ..models.classes import YearGroup, ClassName
 import logging
@@ -105,43 +104,6 @@ class ExamAnalyticsResponse(BaseModel):
     exams: List[ExamPaymentSummary]
 
 
-class ClubMembershipSummary(BaseModel):
-    club_id: str
-    club_name: str
-    price: float
-    capacity: int | None
-    total_members: int
-    confirmed_members: int
-    pending_members: int
-    capacity_utilization: float | None
-    total_revenue: float
-
-
-class ClubMemberInfo(BaseModel):
-    student_id: str
-    reg_number: str
-    first_name: str
-    last_name: str
-    year_group: str
-    class_name: str
-    payment_confirmed: bool
-    status: str
-
-
-class PaginatedClubMemberInfo(BaseModel):
-    items: List[ClubMemberInfo]
-    total: int
-    limit: int
-    offset: int
-
-
-class ClubAnalyticsResponse(BaseModel):
-    total_clubs: int
-    total_memberships: int
-    total_revenue: float
-    clubs: List[ClubMembershipSummary]
-
-
 class DashboardOverview(BaseModel):
     total_students: int
     school_fees_paid_count: int
@@ -150,8 +112,6 @@ class DashboardOverview(BaseModel):
     total_school_fees_collected: float
     total_exam_registrations: int
     total_exam_fees_collected: float
-    total_club_memberships: int
-    total_club_revenue: float
     recent_payments_count: int
 
 
@@ -525,145 +485,6 @@ def get_exam_students(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============ Club Analytics Endpoints ============
-
-@router.get("/clubs/overview", response_model=ClubAnalyticsResponse)
-def get_clubs_overview(response: Response, db: Session = Depends(get_db)):
-    """Get comprehensive club membership analytics."""
-    try:
-        clubs = db.query(Club).all()
-
-        # Get all membership stats in one query
-        club_stats = db.query(
-            ClubMembership.club_id,
-            func.count(ClubMembership.id).label('total_members'),
-            func.sum(case((ClubMembership.payment_confirmed == True, 1), else_=0)).label('confirmed')
-        ).group_by(ClubMembership.club_id).all()
-
-        stats_map = {stat[0]: {'total': stat[1], 'confirmed': stat[2] or 0} for stat in club_stats}
-
-        club_summaries = []
-        total_memberships = 0
-        total_revenue = 0.0
-
-        for club in clubs:
-            stats = stats_map.get(club.id, {'total': 0, 'confirmed': 0})
-            total_members = stats['total']
-            confirmed = stats['confirmed']
-            pending = total_members - confirmed
-
-            capacity_util = None
-            if club.capacity and club.capacity > 0:
-                capacity_util = round(total_members / club.capacity * 100, 1)
-
-            revenue = confirmed * club.price
-
-            club_summaries.append(ClubMembershipSummary(
-                club_id=club.id,
-                club_name=club.name,
-                price=club.price,
-                capacity=club.capacity,
-                total_members=total_members,
-                confirmed_members=confirmed,
-                pending_members=pending,
-                capacity_utilization=capacity_util,
-                total_revenue=revenue
-            ))
-
-            total_memberships += total_members
-            total_revenue += revenue
-
-        # Cache for 5 minutes on client side
-        response.headers["Cache-Control"] = "public, max-age=300"
-
-        return ClubAnalyticsResponse(
-            total_clubs=len(clubs),
-            total_memberships=total_memberships,
-            total_revenue=total_revenue,
-            clubs=club_summaries
-        )
-    except Exception as e:
-        logger.error(f"Error getting clubs overview: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/clubs/members/{club_id}", response_model=PaginatedClubMemberInfo)
-def get_club_members(
-    club_id: str,
-    payment_status: Optional[str] = None,  # "confirmed" or "pending"
-    year_group: Optional[str] = None,
-    search: Optional[str] = None,  # Search by name or reg number
-    limit: int = 50,
-    offset: int = 0,
-    db: Session = Depends(get_db)
-):
-    """Get list of members for a specific club with pagination."""
-    try:
-        club = db.query(Club).filter(Club.id == club_id).first()
-        if not club:
-            raise HTTPException(status_code=404, detail="Club not found")
-
-        # Build query with JOIN to get student data efficiently
-        query = db.query(ClubMembership, Student).join(
-            Student, ClubMembership.student_id == Student.id
-        ).filter(
-            ClubMembership.club_id == club_id
-        )
-
-        # Apply year group filter at SQL level
-        if year_group:
-            try:
-                yg_enum = YearGroup(year_group)
-                query = query.filter(Student.year_group == yg_enum)
-            except ValueError:
-                pass
-
-        # Apply payment status filter at SQL level
-        if payment_status == "confirmed":
-            query = query.filter(ClubMembership.payment_confirmed == True)
-        elif payment_status == "pending":
-            query = query.filter(ClubMembership.payment_confirmed == False)
-
-        # Apply search filter at SQL level
-        if search:
-            search_term = f"%{search.lower()}%"
-            query = query.filter(
-                (func.lower(Student.first_name).like(search_term)) |
-                (func.lower(Student.last_name).like(search_term)) |
-                (func.lower(Student.reg_number).like(search_term))
-            )
-
-        # Get total count
-        total = query.count()
-
-        # Apply pagination at SQL level
-        records = query.offset(offset).limit(limit).all()
-
-        # Build response
-        result = []
-        for membership, student in records:
-            result.append(ClubMemberInfo(
-                student_id=student.id,
-                reg_number=student.reg_number,
-                first_name=student.first_name,
-                last_name=student.last_name,
-                year_group=student.year_group.value if student.year_group else "Unknown",
-                class_name=student.class_name.value if student.class_name else "Unknown",
-                payment_confirmed=membership.payment_confirmed,
-                status=membership.status or "active"
-            ))
-
-        return PaginatedClubMemberInfo(
-            items=result,
-            total=total,
-            limit=limit,
-            offset=offset
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting club members: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============ Dashboard Overview Endpoint ============
@@ -675,7 +496,7 @@ def get_dashboard_overview(response: Response, db: Session = Depends(get_db)):
         # Get all counts in efficient queries
         total_students = db.query(func.count(Student.id)).scalar() or 0
 
-        # School fees - count payments and sum SCHOOL_FEES payment items (avoids counting club share)
+        # School fees - count payments and sum SCHOOL_FEES payment items
         school_fees_stats = db.query(
             func.count(Payment.id).label('payment_count')
         ).filter(
@@ -716,22 +537,6 @@ def get_dashboard_overview(response: Response, db: Session = Depends(get_db)):
         total_exam_registrations = exam_stats.registrations or 0
         total_exam_fees = exam_stats.total_collected or 0.0
 
-        # Club revenue: sum CLUB_FEES payment items (accurate split from combined payments)
-        club_revenue = (
-            db.query(func.coalesce(func.sum(PaymentItem.amount), 0.0))
-            .join(Payment, Payment.id == PaymentItem.payment_id)
-            .filter(
-                Payment.status == PaymentStatus.COMPLETED,
-                PaymentItem.item_type == PaymentType.CLUB_FEES,
-            )
-            .scalar()
-        )
-
-        # Membership count still comes from club memberships
-        total_club_memberships = db.query(func.count(func.distinct(ClubMembership.id))).filter(
-            ClubMembership.payment_confirmed == True
-        ).scalar() or 0
-
         # Cache for 5 minutes on client side
         response.headers["Cache-Control"] = "public, max-age=300"
 
@@ -743,8 +548,6 @@ def get_dashboard_overview(response: Response, db: Session = Depends(get_db)):
             total_school_fees_collected=total_school_fees,
             total_exam_registrations=total_exam_registrations,
             total_exam_fees_collected=total_exam_fees,
-            total_club_memberships=total_club_memberships,
-            total_club_revenue=club_revenue,
             recent_payments_count=school_fees_stats.payment_count or 0
         )
     except Exception as e:

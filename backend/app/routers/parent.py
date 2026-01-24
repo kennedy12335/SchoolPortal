@@ -6,7 +6,6 @@ from typing import List, Optional
 from ..database import get_db
 from ..models.parent import Parent
 from ..models.student import Student
-from ..models.club import ClubMembership, Club
 from ..models.payment import Payment, PaymentStatus
 from pydantic import BaseModel
 from datetime import datetime
@@ -82,21 +81,6 @@ def delete_parent(parent_id: str, db: Session = Depends(get_db)):
 
 
 # Response schemas for parent's students
-class ClubInfo(BaseModel):
-    id: str
-    name: str
-    price: float
-
-    class Config:
-        from_attributes = True
-
-class ClubMembershipInfo(BaseModel):
-    club: ClubInfo
-    status: str
-
-    class Config:
-        from_attributes = True
-
 class StudentWithStatus(BaseModel):
     id: str
     reg_number: str
@@ -108,7 +92,6 @@ class StudentWithStatus(BaseModel):
     email: Optional[str] = None
     outstanding_balance: Optional[float] = None
     school_fees_paid: bool
-    club_memberships: List[ClubMembershipInfo]
 
     class Config:
         from_attributes = True
@@ -121,20 +104,17 @@ class ParentStudentsResponse(BaseModel):
 @router.get("/{parent_id}/students", response_model=ParentStudentsResponse)
 def get_parent_students(parent_id: str, db: Session = Depends(get_db)):
     """
-    Get all students associated with a parent, including their school fees payment status
-    and club memberships.
+    Get all students associated with a parent, including their school fees payment status.
     """
     parent = db.query(Parent).filter(Parent.id == parent_id).first()
     if parent is None:
         raise HTTPException(status_code=404, detail="Parent not found")
 
-    # Get students with their club memberships
+    # Get students
     students = db.query(Student).join(
         Student.parents
     ).filter(
         Parent.id == parent_id
-    ).options(
-        joinedload(Student.club_memberships).joinedload(ClubMembership.club)
     ).all()
 
     # Check school fees payment status for each student
@@ -148,19 +128,6 @@ def get_parent_students(parent_id: str, db: Session = Depends(get_db)):
 
         school_fees_paid = payment is not None
 
-        # Build club membership info
-        club_memberships = []
-        for membership in student.club_memberships:
-            if membership.club:
-                club_memberships.append(ClubMembershipInfo(
-                    club=ClubInfo(
-                        id=str(membership.club.id),
-                        name=membership.club.name,
-                        price=membership.club.price
-                    ),
-                    status=membership.status
-                ))
-
         students_with_status.append(StudentWithStatus(
             id=str(student.id),
             reg_number=student.reg_number,
@@ -171,8 +138,7 @@ def get_parent_students(parent_id: str, db: Session = Depends(get_db)):
             class_name=student.class_name.value if student.class_name else "",
             email=student.email,
             outstanding_balance=student.outstanding_balance,
-            school_fees_paid=school_fees_paid,
-            club_memberships=club_memberships
+            school_fees_paid=school_fees_paid
         ))
 
     return ParentStudentsResponse(

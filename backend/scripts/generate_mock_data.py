@@ -4,7 +4,6 @@ Mock Data Generator for School Payment System
 Generates:
 - 600 students (100 per year group, 20 per class)
 - Parents with realistic family structures
-- 6 clubs
 
 Family rules:
 - Each child has 1 or 2 parents
@@ -25,7 +24,6 @@ from app.database import engine, SessionLocal
 from app.models.base import Base
 from app.models.student import Student
 from app.models.parent import Parent, parent_student_association
-from app.models.club import Club, ClubMembership
 from app.models.classes import YearGroup, ClassName
 from app.models.fee import Fee
 from app.models.student_fee import StudentFee
@@ -71,15 +69,6 @@ MIDDLE_NAMES = [
     "Chinedu", "Oluwafemi", "Adaobi", "Amara", "Tochukwu", "Ifeanyi", "Kelechi",
     "Nneka", "Chiamaka", "Obinna", "Uzoamaka", "Kenechukwu", "Somtochukwu",
     None, None, None, None, None  # Include None for students without middle names
-]
-
-CLUB_DATA = [
-    {"name": "Football Club", "description": "School football team and training sessions", "price": 15000.0, "capacity": 50},
-    {"name": "Chess Club", "description": "Strategic thinking and chess competitions", "price": 8000.0, "capacity": 30},
-    {"name": "Drama Club", "description": "Theatre, acting, and school productions", "price": 12000.0, "capacity": 40},
-    {"name": "Science Club", "description": "Experiments, science fairs, and STEM activities", "price": 10000.0, "capacity": 35},
-    {"name": "Music Club", "description": "Choir, instruments, and music theory", "price": 18000.0, "capacity": 45},
-    {"name": "Debate Club", "description": "Public speaking and debate competitions", "price": 7500.0, "capacity": 25},
 ]
 
 # Fees data (base, fixed fees)
@@ -299,10 +288,8 @@ def seed_database(db: Session):
     # Clear existing data (optional - comment out if you want to append)
     print("Clearing existing data...")
     db.execute(parent_student_association.delete())
-    db.query(ClubMembership).delete()
     db.query(Student).delete()
     db.query(Parent).delete()
-    db.query(Club).delete()
     db.commit()
 
     # Create families
@@ -373,25 +360,6 @@ def seed_database(db: Session):
 
     # Create clubs
     print("\nCreating clubs...")
-    clubs = []
-    for club_data in CLUB_DATA:
-        club = Club(
-            id=str(uuid4()),
-            name=club_data["name"],
-            description=club_data["description"],
-            price=club_data["price"],
-            capacity=club_data["capacity"],
-        )
-        db.add(club)
-        clubs.append(club)
-
-    db.flush()
-    print(f"  Created {len(clubs)} clubs:")
-    for club in clubs:
-        print(f"    - {club.name} (Capacity: {club.capacity}, Price: {club.price})")
-
-    # Create base fees
-    print("\nCreating base fees...")
     fee_objects = []
     for fee_data in FEES_DATA:
         fee = Fee(

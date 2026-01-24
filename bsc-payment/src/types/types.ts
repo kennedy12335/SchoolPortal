@@ -1,11 +1,3 @@
-export interface Club {
-  id: string;
-  name: string;
-  price: number;
-  description?: string;
-  capacity?: number;
-}
-
 export interface Exam {
   id: string;
   exam_name: string;
@@ -13,11 +5,6 @@ export interface Exam {
   extra_fees: number | null;
   allows_installments: boolean;
   applicable_grades: string | null;
-}
-
-export interface ClubMembership {
-  club: Club;
-  status?: string;
 }
 
 export interface Student {
@@ -31,8 +18,6 @@ export interface Student {
   year_group?: string;
   class_name?: string;
   email?: string;
-  club_memberships: ClubMembership[];
-  selectedClubs?: number[]; // Track selected clubs for each student
   school_fees_paid: boolean;
   discount_percentage?: number;
   discount_amount?: number;
@@ -60,7 +45,6 @@ export interface StudentWithStatus {
   class_name: string;
   school_fees_paid: boolean;
   outstanding_balance: number | null;
-  club_memberships: ClubMembership[];
 }
 
 export interface ParentDashboardData {
@@ -87,7 +71,6 @@ export interface Fees {
 export interface FeeBreakdown{
   // Dynamic fees map: key is fee name/code, value is amount
   fees: Record<string, number>
-  club_fees: Club[]
   subtotal: number
   discount_amount: number
   discount_percentage: number

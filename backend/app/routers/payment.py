@@ -8,7 +8,8 @@ from ..database import get_db
 from ..models.payment import Payment, PaymentStatus, ExamPayment
 from ..models.student import Student
 from ..models.parent import Parent
-from ..models.club import Club, ClubMembership
+from ..models.student_fee import StudentFee
+from ..models.fee import Fee
 from ..utils.exams import update_payment_records, update_exam_payment_records
 import requests
 import os
@@ -25,7 +26,10 @@ from ..schemas.payment import (
     PaymentBase,
     PaymentCreate,
     PaymentResponse,
-    PaystackResponse
+    PaystackResponse,
+    SchoolPaymentReceipt,
+    SchoolReceiptStudent,
+    ReceiptFee,
 )
 
 load_dotenv()
@@ -45,10 +49,10 @@ async def initialize_payment_endpoint(payment: PaymentCreate, db: Session = Depe
     logger.info(f"Initializing payment for students: {payment.student_ids}")
     
     try:    
-        # Calculate and validate the amount
+        # Calculate and validate the amount (no clubs)
         fee_calculation = await calculate_fees(
             student_ids=payment.student_ids,
-            student_club_ids=payment.student_club_ids,
+            student_club_ids={},  # No clubs
             db=db
         )
         
@@ -63,10 +67,8 @@ async def initialize_payment_endpoint(payment: PaymentCreate, db: Session = Depe
         payment_data = SchoolFeesPaymentData(
             student_ids=payment.student_ids,
             amount=payment.amount,
-            club_amount=payment.club_amount or 0.0,
             payment_method=payment.payment_method,
             parent_id=payment.parent_id,
-            student_club_ids=payment.student_club_ids,
             student_fee_ids=payment.student_fee_ids,
             description=payment.description
         )
@@ -211,3 +213,69 @@ def verify_payment(payment_reference: str):
     }
     response = requests.get(f"{PAYSTACK_VERIFY_URL}{payment_reference}", headers=headers)
     return response.json()
+
+
+@router.get("/receipt/{payment_reference}", response_model=SchoolPaymentReceipt)
+def get_payment_receipt(payment_reference: str, db: Session = Depends(get_db)):
+    payment = db.query(Payment).filter(Payment.payment_reference == payment_reference).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    parent = payment.payer
+    students = db.query(Student).filter(Student.id.in_(payment.student_ids)).all()
+    student_map = {s.id: s for s in students}
+
+    # Fetch fee rows linked to this payment. Fall back to student_id filter if list is empty.
+    if payment.student_fee_ids:
+        fee_rows = db.query(StudentFee).filter(StudentFee.id.in_(payment.student_fee_ids)).all()
+    else:
+        fee_rows = db.query(StudentFee).filter(StudentFee.student_id.in_(payment.student_ids)).all()
+
+    # Preload fees
+    fee_ids = {row.fee_id for row in fee_rows}
+    fees_by_id = {f.id: f for f in db.query(Fee).filter(Fee.id.in_(fee_ids)).all()} if fee_ids else {}
+
+    students_receipts: list[SchoolReceiptStudent] = []
+    for student_id in payment.student_ids:
+        student = student_map.get(student_id)
+        if not student:
+            continue
+
+        student_fee_rows = [fr for fr in fee_rows if fr.student_id == student_id]
+        receipt_fees: list[ReceiptFee] = []
+        for fr in student_fee_rows:
+            fee_obj = fees_by_id.get(fr.fee_id)
+            amount = float(fr.amount)
+            if fr.discount_percentage:
+                amount = round(amount * (1 - (fr.discount_percentage / 100)), 2)
+            receipt_fees.append(
+                ReceiptFee(
+                    code=fee_obj.code if fee_obj else "UNKNOWN",
+                    name=fee_obj.name if fee_obj else "Fee",
+                    amount=amount,
+                )
+            )
+
+        student_total = round(sum(f.amount for f in receipt_fees), 2)
+
+        students_receipts.append(
+            SchoolReceiptStudent(
+                student_id=student.id,
+                name=f"{student.first_name} {student.last_name}",
+                year_group=student.year_group.name if student.year_group else None,
+                class_name=student.class_name.name if student.class_name else None,
+                fees=receipt_fees,
+                total=student_total,
+            )
+        )
+
+    return SchoolPaymentReceipt(
+        reference=payment.payment_reference,
+        amount=float(payment.amount),
+        payment_method=payment.payment_method,
+        payer_name=f"{parent.first_name} {parent.last_name}" if parent else None,
+        payer_email=parent.email if parent else None,
+        payer_phone=parent.phone if parent else None,
+        students=students_receipts,
+        created_at=payment.date_created.isoformat() if payment.date_created else None,
+    )

@@ -69,21 +69,6 @@ const StudentCard: React.FC<StudentCardProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent className="pb-3">
-        {student.club_memberships.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {student.club_memberships.map((membership, index) => (
-              <Badge key={index} variant="secondary" className="text-xs">
-                {membership.club.name}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {student.club_memberships.length === 0 && (
-          <p className="text-sm text-muted-foreground">No clubs enrolled</p>
-        )}
-      </CardContent>
-
       <CardFooter className="pt-3 gap-2 flex-wrap">
         {!student.school_fees_paid && (
           <Button

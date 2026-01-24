@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base, get_db, init_db, drop_all_tables
-from .routers import parent, student, club, payment, fees, exams, admin_analytics
+from .routers import parent, student, payment, fees, exams, admin_analytics
 import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -48,7 +48,6 @@ app.add_middleware(
 # Include routers
 app.include_router(parent.router, prefix="/api/parents", tags=["parents"])
 app.include_router(student.router, prefix="/api/students", tags=["students"])
-app.include_router(club.router, prefix="/api/clubs", tags=["clubs"])
 app.include_router(payment.router, prefix="/api/payments", tags=["payments"])
 app.include_router(fees.router, prefix="/api/fees", tags=["fees"])
 app.include_router(exams.router, prefix="/api/exams", tags=["exams"])

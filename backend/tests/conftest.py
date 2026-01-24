@@ -201,23 +201,6 @@ def mock_paystack_init_success():
 
 
 @pytest.fixture
-def mock_paystack_split_success():
-    """Mock successful Paystack split payment response"""
-    return {
-        "status": True,
-        "message": "Split created",
-        "data": {
-            "id": 12345,
-            "name": "Payment Split - 2 accounts",
-            "type": "flat",
-            "currency": "NGN",
-            "split_code": "SPL_test123",
-            "active": True
-        }
-    }
-
-
-@pytest.fixture
 def mock_paystack_verify_success():
     """Mock successful Paystack verification response"""
     return {

@@ -22,6 +22,5 @@ class Student(BaseModel):
         secondary=parent_student_association,
         back_populates="students"
     )
-    club_memberships = relationship("ClubMembership", back_populates="student")
     student_fees = relationship("StudentFee", back_populates="student", cascade="all, delete-orphan")
     student_exam_fees = relationship("StudentExamFee", back_populates="student", cascade="all, delete-orphan")

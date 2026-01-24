@@ -246,14 +246,6 @@ const AdminDashboard: React.FC = () => {
             color="bg-purple-500"
             onClick={() => navigate('/admin/exam-fees')}
           />
-          <StatCard
-            icon={Award}
-            title="Club Revenue"
-            value={formatCurrency(overview?.total_club_revenue || 0)}
-            subtitle={`${overview?.total_club_memberships || 0} memberships`}
-            color="bg-orange-500"
-            onClick={() => navigate('/admin/club-memberships')}
-          />
         </div>
 
         {/* School Fees Progress + Quick Stats */}
@@ -311,14 +303,6 @@ const AdminDashboard: React.FC = () => {
               bgColor="bg-purple-100"
               onClick={() => navigate('/admin/exam-fees')}
             />
-            <QuickActionCard
-              icon={Award}
-              title="Club Memberships"
-              description="View club enrollment and membership revenue"
-              color="text-orange-600"
-              bgColor="bg-orange-100"
-              onClick={() => navigate('/admin/club-memberships')}
-            />
           </div>
         </div>
 
@@ -334,14 +318,6 @@ const AdminDashboard: React.FC = () => {
               bgColor="bg-indigo-100"
               onClick={() => navigate('/admin/exams')}
             />
-            <QuickActionCard
-              icon={Award}
-              title="Manage Clubs"
-              description="Configure club settings and capacity"
-              color="text-teal-600"
-              bgColor="bg-teal-100"
-              onClick={() => navigate('/admin/clubs')}
-            />
           </div>
         </div>
 
@@ -355,8 +331,7 @@ const AdminDashboard: React.FC = () => {
             <p className="text-3xl font-bold">
               {formatCurrency(
                 (overview?.total_school_fees_collected || 0) +
-                (overview?.total_exam_fees_collected || 0) +
-                (overview?.total_club_revenue || 0)
+                (overview?.total_exam_fees_collected || 0)
               )}
             </p>
             <p className="text-sm opacity-80 mt-2">Combined school fees, exams, and clubs</p>

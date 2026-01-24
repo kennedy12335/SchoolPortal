@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
-import { StudentFeeDetail, Club } from '../../types/types';
+import { StudentFeeDetail } from '../../types/types';
 
 interface FeeBreakdownProps {
   studentFees: StudentFeeDetail[];
@@ -38,24 +38,6 @@ const FeeBreakdown: React.FC<FeeBreakdownProps> = ({
                   <FeeItem key={label} label={label} amount={Number(value) || 0} />
                 ))}
               </div>
-
-              {/* Club fees */}
-              {fee.fee_breakdown.club_fees.length > 0 && (
-                <>
-                  <Separator className="my-2" />
-                  <div className="space-y-1.5">
-                    <p className="font-medium text-foreground">Club Fees:</p>
-                    {fee.fee_breakdown.club_fees.map((club: Club) => club && (
-                      <FeeItem
-                        key={club.id}
-                        label={club.name}
-                        amount={club.price}
-                        highlight
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
 
               {/* Subtotal */}
               <Separator className="my-2" />
