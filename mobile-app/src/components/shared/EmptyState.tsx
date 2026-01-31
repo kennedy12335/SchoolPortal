@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Button } from '../ui/Button';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
+  iconName?: keyof typeof Ionicons.glyphMap;
   title: string;
   description?: string;
   actionLabel?: string;
@@ -13,6 +15,7 @@ interface EmptyStateProps {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
+  iconName,
   title,
   description,
   actionLabel,
@@ -20,11 +23,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      {icon && <View style={styles.iconContainer}>{icon}</View>}
+      {(icon || iconName) && (
+        <View style={styles.iconContainer}>
+          {icon || (
+            iconName && <Ionicons name={iconName} size={48} color={colors.gray300} />
+          )}
+        </View>
+      )}
       <Text style={styles.title}>{title}</Text>
       {description && <Text style={styles.description}>{description}</Text>}
       {actionLabel && onAction && (
-        <Button onPress={onAction} style={styles.button}>
+        <Button onPress={onAction} variant="outline" style={styles.button}>
           {actionLabel}
         </Button>
       )}
@@ -40,8 +49,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[6],
   },
   iconContainer: {
-    marginBottom: spacing[4],
-    opacity: 0.5,
+    marginBottom: spacing[5],
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: typography.lg,
@@ -55,6 +69,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing[2],
     maxWidth: 280,
+    lineHeight: typography.sm * 1.5,
   },
   button: {
     marginTop: spacing[6],

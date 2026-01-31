@@ -25,6 +25,8 @@ export type StudentExamListItem = {
   exam_name: string;
   exam_price: number;
   extra_fees: number;
+  extra_fees_name?: string;
+  allows_installments?: boolean;
   amount_paid: number;
   amount_due: number;
   is_fully_paid: boolean;

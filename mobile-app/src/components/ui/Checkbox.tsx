@@ -20,16 +20,16 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   const getSize = (): number => {
     switch (size) {
       case 'sm':
-        return 16;
+        return 18;
       case 'lg':
-        return 24;
+        return 26;
       default:
-        return 20;
+        return 22;
     }
   };
 
   const boxSize = getSize();
-  const checkmarkSize = boxSize * 0.6;
+  const checkmarkSize = boxSize * 0.55;
 
   return (
     <TouchableOpacity
@@ -41,6 +41,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         {
           width: boxSize,
           height: boxSize,
+          borderRadius: borderRadius.sm,
         },
         checked && styles.checked,
         disabled && styles.disabled,
@@ -65,14 +66,14 @@ export const Checkbox: React.FC<CheckboxProps> = ({
 const styles = StyleSheet.create({
   container: {
     borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.sm,
+    borderColor: colors.gray300,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
   checked: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   disabled: {
     opacity: 0.5,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ViewStyle, TextStyle, ImageSourcePropType } from 'react-native';
+import { View, Text, Image, StyleSheet, ViewStyle, TextStyle, ImageStyle, ImageSourcePropType } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
 type AvatarSize = 'sm' | 'default' | 'lg' | 'xl';
@@ -9,13 +9,17 @@ interface AvatarProps {
   fallback?: string;
   size?: AvatarSize;
   style?: ViewStyle;
+  color?: string;
 }
+
+type SizeContainerStyle = { width: number; height: number };
 
 export const Avatar: React.FC<AvatarProps> = ({
   source,
   fallback,
   size = 'default',
   style,
+  color,
 }) => {
   const getSizeStyles = (): { container: ViewStyle; text: TextStyle } => {
     switch (size) {
@@ -43,20 +47,21 @@ export const Avatar: React.FC<AvatarProps> = ({
   };
 
   const sizeStyles = getSizeStyles();
+  const bgColor = color || colors.primary;
 
   if (source) {
     return (
       <Image
         source={source}
-        style={[styles.image, sizeStyles.container, style]}
+        style={[styles.image, sizeStyles.container as ImageStyle, style as ImageStyle]}
         resizeMode="cover"
       />
     );
   }
 
   return (
-    <View style={[styles.container, sizeStyles.container, style]}>
-      <Text style={[styles.text, sizeStyles.text]}>{fallback || '?'}</Text>
+    <View style={[styles.container, sizeStyles.container, { backgroundColor: bgColor + '18', borderColor: bgColor + '30' }, style]}>
+      <Text style={[styles.text, sizeStyles.text, { color: bgColor }]}>{fallback || '?'}</Text>
     </View>
   );
 };
@@ -70,21 +75,18 @@ export const getInitials = (firstName?: string, lastName?: string): string => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.primaryLight,
     borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderColor: colors.primaryBorder,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   image: {
     borderRadius: borderRadius.full,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primaryBorder,
   },
   text: {
-    fontWeight: typography.semibold,
-    color: colors.primary,
+    fontWeight: typography.bold,
   },
 });
 

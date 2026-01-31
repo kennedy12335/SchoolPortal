@@ -6,10 +6,11 @@ import {
   ViewStyle,
   TextStyle,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
-type ButtonVariant = 'default' | 'outline' | 'ghost' | 'destructive' | 'secondary';
+type ButtonVariant = 'default' | 'outline' | 'ghost' | 'destructive' | 'secondary' | 'accent';
 type ButtonSize = 'sm' | 'default' | 'lg' | 'icon';
 
 interface ButtonProps {
@@ -18,6 +19,7 @@ interface ButtonProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   disabled?: boolean;
+  loading?: boolean;
   icon?: React.ReactNode;
   iconPosition?: 'left' | 'right';
   style?: ViewStyle;
@@ -31,13 +33,14 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'default',
   size = 'default',
   disabled = false,
+  loading = false,
   icon,
   iconPosition = 'left',
   style,
   textStyle,
   fullWidth = false,
 }) => {
-  const isDisabled = disabled;
+  const isDisabled = disabled || loading;
 
   const getVariantStyles = (): { container: ViewStyle; text: TextStyle } => {
     switch (variant) {
@@ -45,7 +48,7 @@ export const Button: React.FC<ButtonProps> = ({
         return {
           container: {
             backgroundColor: 'transparent',
-            borderWidth: 1,
+            borderWidth: 1.5,
             borderColor: colors.border,
           },
           text: { color: colors.foreground },
@@ -53,7 +56,7 @@ export const Button: React.FC<ButtonProps> = ({
       case 'ghost':
         return {
           container: { backgroundColor: 'transparent' },
-          text: { color: colors.foreground },
+          text: { color: colors.primary },
         };
       case 'destructive':
         return {
@@ -62,12 +65,17 @@ export const Button: React.FC<ButtonProps> = ({
         };
       case 'secondary':
         return {
-          container: { backgroundColor: colors.gray200 },
+          container: { backgroundColor: colors.gray100 },
           text: { color: colors.foreground },
+        };
+      case 'accent':
+        return {
+          container: { backgroundColor: colors.accent },
+          text: { color: '#FFFFFF' },
         };
       default:
         return {
-          container: { backgroundColor: colors.gray900 },
+          container: { backgroundColor: colors.primary },
           text: { color: '#FFFFFF' },
         };
     }
@@ -87,17 +95,17 @@ export const Button: React.FC<ButtonProps> = ({
       case 'lg':
         return {
           container: {
-            paddingVertical: spacing[3.5],
+            paddingVertical: spacing[4],
             paddingHorizontal: spacing[8],
-            minHeight: 48,
+            minHeight: 52,
           },
           text: { fontSize: typography.base },
         };
       case 'icon':
         return {
           container: {
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             paddingVertical: 0,
             paddingHorizontal: 0,
             justifyContent: 'center',
@@ -108,9 +116,9 @@ export const Button: React.FC<ButtonProps> = ({
       default:
         return {
           container: {
-            paddingVertical: spacing[2.5],
-            paddingHorizontal: spacing[4],
-            minHeight: 40,
+            paddingVertical: spacing[3],
+            paddingHorizontal: spacing[5],
+            minHeight: 44,
           },
           text: { fontSize: typography.sm },
         };
@@ -124,7 +132,7 @@ export const Button: React.FC<ButtonProps> = ({
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
       style={[
         styles.container,
         variantStyles.container,
@@ -135,15 +143,25 @@ export const Button: React.FC<ButtonProps> = ({
       ]}
     >
       <View style={styles.content}>
-        {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
-        {typeof children === 'string' ? (
-          <Text style={[styles.text, variantStyles.text, sizeStyles.text, textStyle]}>
-            {children}
-          </Text>
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={variantStyles.text.color as string}
+            style={styles.loader}
+          />
         ) : (
-          children
+          <>
+            {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
+            {typeof children === 'string' ? (
+              <Text style={[styles.text, variantStyles.text, sizeStyles.text, textStyle]}>
+                {children}
+              </Text>
+            ) : (
+              children
+            )}
+            {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
+          </>
         )}
-        {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
       </View>
     </TouchableOpacity>
   );
@@ -176,6 +194,9 @@ const styles = StyleSheet.create({
   },
   iconRight: {
     marginLeft: spacing[2],
+  },
+  loader: {
+    marginVertical: 2,
   },
 });
 

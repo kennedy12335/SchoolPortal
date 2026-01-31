@@ -25,6 +25,9 @@ from ..services.payment_service import (
     PaymentType,
     ExamFeesPaymentData
 )
+
+# Import exam service helpers
+from ..services.exam_service import create_exam as create_exam_service, populate_student_exam_fees
 from ..schemas.payment import (
     ExamPaymentDetails,
     ExamPaymentReceipt,
@@ -43,6 +46,7 @@ class ExamCreate(BaseModel):
     exam_name: str
     amount: float
     extra_fees: float = 0
+    extra_fees_name: str | None = None
     allows_installments: bool = False
     applicable_grades: list[str] | None = None  # List of YearGroup enum names e.g. ["YEAR_10", "YEAR_11", "YEAR_12"]
 
@@ -51,6 +55,7 @@ class ExamUpdate(BaseModel):
     exam_name: str
     amount: float
     extra_fees: float = 0
+    extra_fees_name: str | None = None
     allows_installments: bool = False
     applicable_grades: list[str] | None = None
 
@@ -59,6 +64,7 @@ class ExamResponse(BaseModel):
     exam_name: str
     amount: float
     extra_fees: float | None = None
+    extra_fees_name: str | None = None
     allows_installments: bool = False
     applicable_grades: list[str] | None = None  # List of YearGroup enum names
 
@@ -72,6 +78,8 @@ class ExamPaymentStatusResponse(BaseModel):
     exam_name: str
     exam_price: float
     extra_fees: float | None = None
+    extra_fees_name: str | None = None
+    allows_installments: bool = False
     amount_paid: float
     amount_due: float
     is_fully_paid: bool
@@ -99,25 +107,19 @@ class ExamPaymentResponse(BaseModel):
 
 @router.post("/create-exam", response_model=ExamResponse)
 def create_exam(exam: ExamCreate, db: Session = Depends(get_db)):
+    logger.info(f"Received create-exam payload: {exam.dict()}")
     try:
-        new_exam = ExamFees(
-            exam_name=exam.exam_name,
-            amount=exam.amount,
-            extra_fees=exam.extra_fees,
-            allows_installments=exam.allows_installments,
-            applicable_grades=exam.applicable_grades,
-        )
-        db.add(new_exam)
-        db.commit()
-        db.refresh(new_exam)
+        new_exam = create_exam_service(db=db, exam_payload=exam)
         return new_exam
+    except HTTPException:
+        raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error creating exam: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @router.put("/update-exam", response_model=ExamResponse)
 def update_exam(exam_data: ExamUpdate, db: Session = Depends(get_db)):
+    logger.info(f"Updating exam with payload: {exam_data.dict()}")
     try:
         exam = db.query(ExamFees).filter(ExamFees.id == exam_data.id).first()
         if not exam:
@@ -125,6 +127,7 @@ def update_exam(exam_data: ExamUpdate, db: Session = Depends(get_db)):
         exam.exam_name = exam_data.exam_name
         exam.amount = exam_data.amount
         exam.extra_fees = exam_data.extra_fees
+        exam.extra_fees_name = exam_data.extra_fees_name
         exam.allows_installments = exam_data.allows_installments
         exam.applicable_grades = exam_data.applicable_grades
         db.commit()
@@ -313,6 +316,8 @@ def get_student_exam_list(student_id: str, db: Session = Depends(get_db)):
             exam_name=exam_fees.exam_name,
             exam_price=exam_fees.amount,
             extra_fees=exam_fees.extra_fees,
+            extra_fees_name=exam_fees.extra_fees_name,
+            allows_installments=exam_fees.allows_installments,
             amount_paid=amount_paid,
             amount_due=amount_due,
             is_fully_paid=student_exam_fee.paid))

@@ -31,6 +31,7 @@ class ExamFees(BaseModel):
     exam_name = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     extra_fees = Column(Float, nullable=True)
+    extra_fees_name = Column(String, nullable=True)
     allows_installments = Column(Boolean, default=False, nullable=False)
     applicable_grades = Column(JSON, nullable=True)  # Stores list of YearGroup names, e.g. ["YEAR_10", "YEAR_11", "YEAR_12"]
 

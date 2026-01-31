@@ -1,21 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Checkbox } from '../ui';
 import { Exam } from './ExamList';
-
-// Icons
-const TrashIcon = () => <Text style={styles.iconText}>🗑️</Text>;
 
 export interface SelectedExamInfo {
   exam: Exam;
   paymentAmount: number;
   includeTextbook: boolean;
+  extraFeeAmount?: number;
 }
 
 interface ExamPaymentDetailsProps {
   selectedExams: Map<string, SelectedExamInfo>;
-  textbookPrice: number;
   onUpdatePaymentAmount: (examId: string, amount: number) => void;
   onToggleTextbook: (examId: string) => void;
   onRemoveExam: (examId: string) => void;
@@ -24,17 +22,11 @@ interface ExamPaymentDetailsProps {
 
 export const ExamPaymentDetails: React.FC<ExamPaymentDetailsProps> = ({
   selectedExams,
-  textbookPrice,
   onUpdatePaymentAmount,
   onToggleTextbook,
   onRemoveExam,
   onPayFullBalance,
 }) => {
-  const allowsPartialPayment = (examName: string): boolean => {
-    const name = examName.toLowerCase();
-    return name.includes('igcse') || name.includes('checkpoint');
-  };
-
   const isSAT = (examName: string): boolean => {
     return examName.toLowerCase().includes('sat');
   };
@@ -50,33 +42,34 @@ export const ExamPaymentDetails: React.FC<ExamPaymentDetailsProps> = ({
       </CardHeader>
       <CardContent style={styles.content}>
         {Array.from(selectedExams.entries()).map(([examId, info]) => {
-          const allowsPartial = allowsPartialPayment(info.exam.exam_name);
-          const showTextbookOption = isSAT(info.exam.exam_name);
+          // Show input when exam allows installments or when a partial payment already exists
+          const allowsInstallments = !!info.exam.allows_installments || info.exam.amount_paid > 0;
+          const showExtraFeesOption = !!info.exam.extra_fees && info.exam.extra_fees > 0 && !!info.exam.extra_fees_name;
 
           return (
             <View key={examId} style={styles.examCard}>
               <View style={styles.examHeader}>
                 <Text style={styles.examName}>{info.exam.exam_name}</Text>
                 <TouchableOpacity onPress={() => onRemoveExam(examId)} style={styles.removeButton}>
-                  <TrashIcon />
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
                 </TouchableOpacity>
               </View>
 
               {/* Payment Amount */}
               <View style={styles.amountSection}>
                 <Text style={styles.label}>Payment Amount</Text>
-                {allowsPartial ? (
+                {allowsInstallments ? (
                   <View style={styles.amountRow}>
                     <View style={styles.inputContainer}>
-                      <Text style={styles.currencyPrefix}>₦</Text>
+                      <Text style={styles.currencyPrefix}>N</Text>
                       <Input
-                        value={info.paymentAmount > 0 ? String(info.paymentAmount) : ''}
+                        value={info.paymentAmount > 0 ? info.paymentAmount.toLocaleString() : ''}
                         onChangeText={(text) => {
                           const amount = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
                           onUpdatePaymentAmount(examId, Math.min(amount, info.exam.amount_due));
                         }}
                         keyboardType="numeric"
-                        placeholder="0"
+                        placeholder="Enter amount to pay now"
                         containerStyle={styles.input}
                       />
                     </View>
@@ -91,21 +84,25 @@ export const ExamPaymentDetails: React.FC<ExamPaymentDetailsProps> = ({
                 ) : (
                   <View style={styles.fixedAmount}>
                     <Text style={styles.fixedAmountText}>
-                      ₦{info.exam.amount_due.toLocaleString()}
+                      N{info.exam.amount_due.toLocaleString()}
                     </Text>
                     <Text style={styles.fixedAmountNote}>(Full payment required)</Text>
                   </View>
                 )}
 
-                {allowsPartial && info.exam.amount_due > 0 && (
+                {allowsInstallments && info.exam.amount_due > 0 && (
                   <Text style={styles.balanceNote}>
-                    Balance due: ₦{info.exam.amount_due.toLocaleString()}
+                    Balance due: N{info.exam.amount_due.toLocaleString()}
                   </Text>
+                )}
+
+                {allowsInstallments && (
+                  <Text style={[styles.balanceNote, {marginTop: 6}]}>Installments allowed — enter the amount you wish to pay now.</Text>
                 )}
               </View>
 
-              {/* Study Materials Option (SAT only) */}
-              {showTextbookOption && (
+              {/* Study Materials Option (if extra fees exist) */}
+              {showExtraFeesOption && (
                 <TouchableOpacity
                   style={styles.textbookRow}
                   onPress={() => onToggleTextbook(examId)}
@@ -115,8 +112,8 @@ export const ExamPaymentDetails: React.FC<ExamPaymentDetailsProps> = ({
                     onPress={() => onToggleTextbook(examId)}
                   />
                   <View style={styles.textbookInfo}>
-                    <Text style={styles.textbookLabel}>Include Study Materials</Text>
-                    <Text style={styles.textbookPrice}>₦{textbookPrice.toLocaleString()}</Text>
+                    <Text style={styles.textbookLabel}>Include {info.exam.extra_fees_name}</Text>
+                    <Text style={styles.textbookPrice}>N{info.exam.extra_fees.toLocaleString()}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -125,7 +122,7 @@ export const ExamPaymentDetails: React.FC<ExamPaymentDetailsProps> = ({
               <View style={styles.subtotalRow}>
                 <Text style={styles.subtotalLabel}>Exam Total</Text>
                 <Text style={styles.subtotalValue}>
-                  ₦{(info.paymentAmount + (info.includeTextbook ? textbookPrice : 0)).toLocaleString()}
+                  N{(info.paymentAmount + (info.includeTextbook && showExtraFeesOption ? info.exam.extra_fees : 0)).toLocaleString()}
                 </Text>
               </View>
             </View>
@@ -142,7 +139,7 @@ const styles = StyleSheet.create({
   },
   examCard: {
     padding: spacing[4],
-    backgroundColor: colors.gray50,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     gap: spacing[4],
   },
@@ -180,8 +177,8 @@ const styles = StyleSheet.create({
   },
   currencyPrefix: {
     fontSize: typography.base,
-    fontWeight: typography.medium,
-    color: colors.foreground,
+    fontWeight: typography.bold,
+    color: colors.primary,
     marginRight: spacing[2],
   },
   input: {
@@ -209,10 +206,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    padding: spacing[3],
-    backgroundColor: colors.background,
+    padding: spacing[4],
+    backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
   },
   textbookInfo: {
@@ -228,7 +225,7 @@ const styles = StyleSheet.create({
   textbookPrice: {
     fontSize: typography.sm,
     fontWeight: typography.semibold,
-    color: colors.purple,
+    color: colors.examFees,
   },
   subtotalRow: {
     flexDirection: 'row',
@@ -247,9 +244,6 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontWeight: typography.bold,
     color: colors.primary,
-  },
-  iconText: {
-    fontSize: 16,
   },
 });
 

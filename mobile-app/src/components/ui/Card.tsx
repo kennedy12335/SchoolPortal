@@ -5,7 +5,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../theme'
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  variant?: 'default' | 'warning' | 'success' | 'error';
+  variant?: 'default' | 'warning' | 'success' | 'error' | 'accent';
 }
 
 export const Card: React.FC<CardProps> = ({ children, style, variant = 'default' }) => {
@@ -19,12 +19,17 @@ export const Card: React.FC<CardProps> = ({ children, style, variant = 'default'
       case 'success':
         return {
           backgroundColor: colors.successLight,
-          borderColor: colors.success,
+          borderColor: colors.successBorder,
         };
       case 'error':
         return {
           backgroundColor: colors.errorLight,
-          borderColor: colors.error,
+          borderColor: colors.errorBorder,
+        };
+      case 'accent':
+        return {
+          backgroundColor: colors.accentLight,
+          borderColor: colors.accentBorder,
         };
       default:
         return {
@@ -109,24 +114,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   header: {
-    padding: spacing[4],
+    padding: spacing[5],
     paddingBottom: spacing[2],
   },
   title: {
     fontWeight: typography.semibold,
     color: colors.foreground,
+    letterSpacing: typography.tight_ls,
   },
   description: {
     fontSize: typography.sm,
     color: colors.mutedForeground,
     marginTop: spacing[1],
+    lineHeight: typography.sm * 1.5,
   },
   content: {
-    padding: spacing[4],
+    padding: spacing[5],
     paddingTop: 0,
   },
   footer: {
-    padding: spacing[4],
+    padding: spacing[5],
     paddingTop: spacing[2],
     flexDirection: 'row',
     flexWrap: 'wrap',

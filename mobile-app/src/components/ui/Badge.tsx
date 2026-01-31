@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
-type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
+type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' | 'accent';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -46,10 +46,15 @@ export const Badge: React.FC<BadgeProps> = ({
           container: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border },
           text: { color: colors.foreground },
         };
+      case 'accent':
+        return {
+          container: { backgroundColor: colors.accentLight },
+          text: { color: colors.accent },
+        };
       default:
         return {
-          container: { backgroundColor: colors.primary },
-          text: { color: colors.primaryForeground },
+          container: { backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.primaryBorder },
+          text: { color: colors.primary },
         };
     }
   };
@@ -60,7 +65,7 @@ export const Badge: React.FC<BadgeProps> = ({
         return {
           container: {
             paddingVertical: spacing[0.5],
-            paddingHorizontal: spacing[1.5],
+            paddingHorizontal: spacing[2],
           },
           text: { fontSize: typography.xs - 1 },
         };
@@ -68,7 +73,7 @@ export const Badge: React.FC<BadgeProps> = ({
         return {
           container: {
             paddingVertical: spacing[1],
-            paddingHorizontal: spacing[2],
+            paddingHorizontal: spacing[2.5],
           },
           text: { fontSize: typography.xs },
         };
@@ -93,7 +98,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   text: {
-    fontWeight: typography.medium,
+    fontWeight: typography.semibold,
   },
 });
 

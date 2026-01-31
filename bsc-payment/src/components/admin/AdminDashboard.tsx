@@ -9,7 +9,6 @@ import {
   CreditCard,
   TrendingUp,
   BookOpen,
-  Award,
   ChevronRight,
   RefreshCw,
   BarChart3,

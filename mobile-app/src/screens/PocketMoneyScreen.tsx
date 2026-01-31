@@ -2,55 +2,74 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Linking from 'expo-linking';
-import { colors, typography, spacing, borderRadius } from '../theme';
-import { Card, CardHeader, CardTitle, CardContent, Button, Separator } from '../components/ui';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { Card, CardContent, Button } from '../components/ui';
 import { EmptyState } from '../components/shared';
 import { ParentsApi, StudentSummary } from '../api/parents';
 
 type Props = NativeStackScreenProps<any>;
 
-// Icons
-const ArrowLeftIcon = () => <Text style={styles.iconText}>←</Text>;
-const CreditCardIcon = () => <Text style={styles.iconText}>💳</Text>;
-const MoneyIcon = () => <Text style={styles.iconEmoji}>💰</Text>;
-
 export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
   const studentId = route.params?.studentId;
 
+  const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
+    studentId ? String(studentId) : null
+  );
   const [student, setStudent] = useState<StudentSummary | null>(null);
   const [parentId, setParentId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // For demo - hardcoded parent ID
   const demoParentId = 'f9d03e65-ed2f-45dd-8967-049d51ea3315';
 
-  // Load data
+  // Load parent students
   useEffect(() => {
     const loadData = async () => {
-      if (!studentId) {
-        setError('No student selected');
-        return;
-      }
-
       try {
+        setLoading(true);
         const parentResponse = await ParentsApi.getParentStudents(demoParentId);
-
         setParentId(parentResponse.parent.id);
-        const foundStudent = parentResponse.students.find(
-          (s) => String(s.id) === String(studentId)
-        );
+        setStudents(parentResponse.students);
+
+        const initialId = selectedStudentId ?? (parentResponse.students[0] ? String(parentResponse.students[0].id) : null);
+        setSelectedStudentId(initialId);
+
+        if (!initialId) {
+          setError('No student available');
+          setStudent(null);
+          setLoading(false);
+          return;
+        }
+
+        const foundStudent = parentResponse.students.find((s) => String(s.id) === String(initialId));
         setStudent(foundStudent || null);
       } catch (e: any) {
         setError(e?.message || 'Failed to load data');
+      } finally {
+        setLoading(false);
       }
     };
 
     loadData();
-  }, [studentId]);
+  }, []);
+
+  // Update student when selectedStudentId changes
+  useEffect(() => {
+    if (!selectedStudentId) {
+      setStudent(null);
+      return;
+    }
+
+    const foundStudent = students.find((s) => String(s.id) === String(selectedStudentId));
+    setStudent(foundStudent || null);
+    setError(null);
+  }, [selectedStudentId, students]);
 
   const handleAmountChange = (text: string) => {
     // Only allow numbers and decimal point
@@ -69,17 +88,13 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
 
     try {
       // For now, simulate payment initialization
-      // In a real implementation, this would call a pocket money API
       const paymentDescription = description.trim() || `Pocket money for ${student.first_name} ${student.last_name}`;
 
       // Simulate API call - replace with actual API when backend is ready
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // For demo purposes, show success message
-      // In real implementation, this would redirect to payment gateway
-      alert(`Pocket money payment of ₦${parsedAmount.toLocaleString()} initiated for ${student.first_name} ${student.last_name}`);
+      alert(`Pocket money payment of N${parsedAmount.toLocaleString()} initiated for ${student.first_name} ${student.last_name}`);
 
-      // Navigate back to dashboard
       navigation.goBack();
     } catch (e: any) {
       setError(e?.message || 'Failed to initialize payment');
@@ -88,19 +103,28 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  if (!student) {
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingPlaceholder} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!student && students.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeftIcon />
+            <Ionicons name="arrow-back" size={20} color={colors.foreground} />
           </TouchableOpacity>
         </View>
         <EmptyState
-          title="Student not found"
-          description="The selected student could not be found."
-          actionLabel="Go to Dashboard"
-          onAction={() => navigation.navigate('Home')}
+          iconName="person-outline"
+          title="No students found"
+          description="You don't have any students associated with this account."
+          actionLabel="Go Back"
+          onAction={() => navigation.goBack()}
         />
       </SafeAreaView>
     );
@@ -112,34 +136,61 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Modern Header */}
+        {/* Header */}
         <View style={styles.headerSection}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeftIcon />
-          </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>Pocket Money</Text>
+            <View style={styles.headerIconRow}>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+              <Text style={styles.title}>Pocket Money</Text>
+            </View>
+
+            {/* Student selector - buttons for switching students */}
+            {students.length > 1 && (
+              <View style={styles.studentSelector}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.studentChips}>
+                    {students.map((student) => {
+                      const isActive = String(student.id) === selectedStudentId;
+                      return (
+                        <TouchableOpacity
+                          key={student.id}
+                          style={[styles.studentChip, isActive && styles.studentChipActive]}
+                          onPress={() => setSelectedStudentId(String(student.id))}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.studentChipText, isActive && styles.studentChipTextActive]}>
+                            {student.first_name} {student.last_name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
             <Text style={styles.subtitle}>
-              Send pocket money to {student.first_name} {student.last_name}
+              {student ? `Send pocket money to ${student.first_name} ${student.last_name}` : 'Select a student'}
             </Text>
           </View>
         </View>
 
         <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Payment Details</Text>
-
           <Card style={styles.formCard}>
             <CardContent style={styles.formContent}>
               {/* Amount Input */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Amount (₦)</Text>
+                <Text style={styles.inputLabel}>Amount</Text>
                 <View style={styles.amountInputContainer}>
-                  <Text style={styles.currencySymbol}>₦</Text>
+                  <Text style={styles.currencySymbol}>N</Text>
                   <TextInput
                     style={styles.amountInput}
                     value={amount}
                     onChangeText={handleAmountChange}
                     placeholder="0.00"
+                    placeholderTextColor={colors.gray400}
                     keyboardType="decimal-pad"
                     maxLength={10}
                   />
@@ -154,6 +205,7 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
                   value={description}
                   onChangeText={setDescription}
                   placeholder="e.g., Weekly allowance, Lunch money, etc."
+                  placeholderTextColor={colors.gray400}
                   multiline
                   numberOfLines={3}
                   maxLength={200}
@@ -163,14 +215,17 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
               {/* Amount Preview */}
               {parsedAmount > 0 && (
                 <View style={styles.amountPreview}>
-                  <Text style={styles.previewLabel}>Amount to send:</Text>
-                  <Text style={styles.previewAmount}>₦{parsedAmount.toLocaleString()}</Text>
+                  <View style={styles.previewLeft}>
+                    <Ionicons name="cash-outline" size={18} color={colors.primary} />
+                    <Text style={styles.previewLabel}>Amount to send</Text>
+                  </View>
+                  <Text style={styles.previewAmount}>N{parsedAmount.toLocaleString()}</Text>
                 </View>
               )}
 
               {error && (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorIcon}>⚠️</Text>
+                  <Ionicons name="alert-circle" size={18} color={colors.errorForeground} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
@@ -179,24 +234,29 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
                 fullWidth
                 size="lg"
                 disabled={!canSubmit}
+                loading={isSubmitting}
                 onPress={handlePayment}
                 style={styles.submitButton}
+                icon={<Ionicons name="send-outline" size={18} color={colors.white} />}
               >
-                {isSubmitting ? 'Processing...' : `Send ₦${parsedAmount.toLocaleString()}`}
+                {isSubmitting ? 'Processing...' : parsedAmount > 0 ? `Send N${parsedAmount.toLocaleString()}` : 'Send'}
               </Button>
             </CardContent>
           </Card>
         </View>
 
         {/* Info Card */}
-        <Card style={styles.infoCard}>
+        <Card variant="accent" style={styles.infoCard}>
           <CardContent style={styles.infoContent}>
-            <Text style={styles.infoTitle}>💡 How it works</Text>
+            <View style={styles.infoTitleRow}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
+              <Text style={styles.infoTitle}>How it works</Text>
+            </View>
             <Text style={styles.infoText}>
-              • Enter the amount you want to send as pocket money{'\n'}
-              • Add an optional description for the transaction{'\n'}
-              • Your child will receive the money instantly{'\n'}
-              • All transactions are secure and tracked
+              {'\u2022'} Enter the amount you want to send as pocket money{'\n'}
+              {'\u2022'} Add an optional description for the transaction{'\n'}
+              {'\u2022'} Your child will receive the money instantly{'\n'}
+              {'\u2022'} All transactions are secure and tracked
             </Text>
           </CardContent>
         </Card>
@@ -208,13 +268,11 @@ export const PocketMoneyScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray50,
+    backgroundColor: colors.surface,
   },
-  centered: {
+  loadingPlaceholder: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 400,
+    backgroundColor: colors.surface,
   },
   headerBar: {
     padding: spacing[4],
@@ -225,31 +283,33 @@ const styles = StyleSheet.create({
 
   // Header
   headerSection: {
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[6],
   },
   headerContent: {
-    marginTop: spacing[4],
+    marginTop: spacing[2],
+  },
+  headerIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[3],
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white || '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.gray900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.sm,
   },
   title: {
-    fontSize: typography['3xl'],
+    fontSize: typography['2xl'],
     fontWeight: typography.bold,
     color: colors.foreground,
-    marginBottom: spacing[2],
+    letterSpacing: typography.tight_ls,
   },
   subtitle: {
     fontSize: typography.base,
@@ -257,24 +317,47 @@ const styles = StyleSheet.create({
     lineHeight: typography.base * 1.5,
   },
 
+  // Student selector
+  studentSelector: {
+    marginTop: spacing[3],
+    marginBottom: spacing[3],
+  },
+  studentChips: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  studentChip: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2.5],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  studentChipText: {
+    fontSize: typography.sm,
+    fontWeight: typography.medium,
+    color: colors.foreground,
+  },
+  studentChipTextActive: {
+    color: colors.white,
+    fontWeight: typography.semibold,
+  },
+
   // Form
   formSection: {
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[5],
     marginBottom: spacing[6],
   },
-  sectionLabel: {
-    fontSize: typography.lg,
-    fontWeight: typography.semibold,
-    color: colors.foreground,
-    marginBottom: spacing[4],
-  },
   formCard: {
-    backgroundColor: colors.white || '#FFFFFF',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    ...shadows.md,
   },
   formContent: {
     paddingVertical: spacing[5],
@@ -291,28 +374,29 @@ const styles = StyleSheet.create({
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.white,
   },
   currencySymbol: {
-    fontSize: typography.lg,
+    fontSize: typography.xl,
     fontWeight: typography.bold,
-    color: colors.foreground,
+    color: colors.primary,
     paddingLeft: spacing[4],
     paddingRight: spacing[2],
   },
   amountInput: {
     flex: 1,
-    fontSize: typography.lg,
+    fontSize: typography.xl,
+    fontWeight: typography.semibold,
     paddingVertical: spacing[4],
     paddingRight: spacing[4],
     color: colors.foreground,
   },
   descriptionInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
     borderRadius: borderRadius.lg,
     padding: spacing[4],
     fontSize: typography.base,
@@ -326,9 +410,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing[4],
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
     borderRadius: borderRadius.lg,
     marginBottom: spacing[4],
+  },
+  previewLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   previewLabel: {
     fontSize: typography.sm,
@@ -348,24 +437,26 @@ const styles = StyleSheet.create({
 
   // Info Card
   infoCard: {
-    marginHorizontal: spacing[6],
-    backgroundColor: colors.successLight,
-    borderWidth: 1,
-    borderColor: colors.success,
+    marginHorizontal: spacing[5],
   },
   infoContent: {
     padding: spacing[5],
   },
-  infoTitle: {
-    fontSize: typography.lg,
-    fontWeight: typography.bold,
-    color: colors.success,
+  infoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
     marginBottom: spacing[3],
+  },
+  infoTitle: {
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    color: colors.accent,
   },
   infoText: {
     fontSize: typography.sm,
-    color: colors.successForeground,
-    lineHeight: typography.sm * 1.6,
+    color: colors.accentDark,
+    lineHeight: typography.sm * 1.8,
   },
 
   // Banners
@@ -375,26 +466,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing[3],
     marginBottom: spacing[4],
-  },
-  errorIcon: {
-    fontSize: 20,
-    marginRight: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.errorBorder,
   },
   errorText: {
     flex: 1,
     fontSize: typography.sm,
     color: colors.errorForeground,
-  },
-
-  // Icons
-  iconText: {
-    fontSize: 20,
-    color: colors.foreground,
-  },
-  iconEmoji: {
-    fontSize: 48,
-    opacity: 0.5,
   },
 });
 

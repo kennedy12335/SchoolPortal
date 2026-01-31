@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
   horizontal: {
     width: '100%',
     backgroundColor: colors.border,
-    marginVertical: spacing[2],
+    marginVertical: spacing[3],
   },
   vertical: {
     height: '100%',

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { Card, CardContent, Button } from '../components/ui';
 import { EmptyState } from '../components/shared';
 import { StudentSelector, FeeBreakdown } from '../components/school-fees';
@@ -12,11 +13,6 @@ import { FeesApi, FeeCalculationResponse } from '../api/fees';
 import { PaymentsApi } from '../api/payments';
 
 type Props = NativeStackScreenProps<any>;
-
-// Icons
-const ArrowLeftIcon = () => <Text style={styles.iconText}>←</Text>;
-const CreditCardIcon = () => <Text style={styles.iconText}>💳</Text>;
-const UsersIcon = () => <Text style={styles.iconEmoji}>👥</Text>;
 
 export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -27,6 +23,7 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
   const [totalAmount, setTotalAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Get preselected student from navigation params
   const preselectedStudentId = route.params?.selectedStudentId;
@@ -57,6 +54,8 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
         }
       } catch (e: any) {
         setError(e?.message || 'Failed to load data');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -122,20 +121,28 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const eligibleStudents = students.filter((s) => !s.school_fees_paid);
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingPlaceholder} />
+      </SafeAreaView>
+    );
+  }
+
   if (eligibleStudents.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeftIcon />
+            <Ionicons name="arrow-back" size={20} color={colors.foreground} />
           </TouchableOpacity>
         </View>
         <EmptyState
-          icon={<UsersIcon />}
+          iconName="people-outline"
           title="No pending school fees"
           description="All your children's school fees have been paid."
-          actionLabel="Go to Dashboard"
-          onAction={() => navigation.navigate('Home')}
+          actionLabel="Go Back"
+          onAction={() => navigation.goBack()}
         />
       </SafeAreaView>
     );
@@ -143,19 +150,21 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Modern Header */}
+        {/* Header */}
         <View style={styles.headerSection}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ArrowLeftIcon />
-          </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>School Fees Payment</Text>
+            <View style={styles.headerIconRow}>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+              <Text style={styles.title}>School Fees</Text>
+            </View>
             <Text style={styles.subtitle}>
-              Select students to pay school fees for
+              Select students to pay school fees
             </Text>
           </View>
         </View>
@@ -179,7 +188,7 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Error Message */}
         {error && (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorIcon}>⚠️</Text>
+            <Ionicons name="alert-circle" size={18} color={colors.errorForeground} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -191,9 +200,11 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
               fullWidth
               size="lg"
               disabled={!canSubmit}
+              loading={isSubmitting}
               onPress={handlePayment}
+              icon={<Ionicons name="card-outline" size={18} color={colors.white} />}
             >
-              {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
+              {isSubmitting ? 'Processing...' : `Pay N${totalAmount.toLocaleString()}`}
             </Button>
           </View>
         )}
@@ -205,13 +216,11 @@ export const SchoolFeesScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.gray50,
+    backgroundColor: colors.surface,
   },
-  centered: {
+  loadingPlaceholder: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 400,
+    backgroundColor: colors.surface,
   },
   headerBar: {
     padding: spacing[4],
@@ -219,105 +228,83 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing[8],
   },
-  
+
   // Header
   headerSection: {
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[6],
   },
   headerContent: {
-    marginTop: spacing[4],
+    marginTop: spacing[2],
+  },
+  headerIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[3],
+  },
+  headerIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white || '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.gray900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadows.sm,
   },
   title: {
-    fontSize: typography['3xl'],
+    fontSize: typography['2xl'],
     fontWeight: typography.bold,
     color: colors.foreground,
-    marginBottom: spacing[2],
+    letterSpacing: typography.tight_ls,
   },
   subtitle: {
     fontSize: typography.base,
     color: colors.mutedForeground,
     lineHeight: typography.base * 1.5,
   },
-  
-  // Section
-  sectionLabel: {
-    fontSize: typography.lg,
-    fontWeight: typography.semibold,
-    color: colors.foreground,
-    marginBottom: spacing[4],
-  },
-  
+
   // Cards
   selectionCard: {
-    marginHorizontal: spacing[6],
+    marginHorizontal: spacing[5],
     marginBottom: spacing[4],
   },
   cardPadding: {
     paddingVertical: spacing[5],
   },
-  calculatingCard: {
-    marginHorizontal: spacing[6],
-    marginBottom: spacing[4],
-  },
-  loadingContent: {
-    alignItems: 'center',
-    paddingVertical: spacing[8],
-  },
-  loadingText: {
-    fontSize: typography.sm,
-    color: colors.mutedForeground,
-    marginTop: spacing[2],
-  },
-  
+
   // Error
   errorBanner: {
-    marginHorizontal: spacing[6],
+    marginHorizontal: spacing[5],
     marginBottom: spacing[4],
     padding: spacing[4],
     backgroundColor: colors.errorLight,
     borderRadius: borderRadius.lg,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  errorIcon: {
-    fontSize: 20,
-    marginRight: spacing[3],
+    gap: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.errorBorder,
   },
   errorText: {
     flex: 1,
     fontSize: typography.sm,
     color: colors.errorForeground,
   },
-  
+
   // Payment Section
   paymentSection: {
-    marginHorizontal: spacing[6],
+    marginHorizontal: spacing[5],
     marginTop: spacing[2],
-  },
-  
-  // Icons
-  iconText: {
-    fontSize: 20,
-    color: colors.foreground,
-  },
-  iconEmoji: {
-    fontSize: 48,
-    opacity: 0.5,
   },
 });
 

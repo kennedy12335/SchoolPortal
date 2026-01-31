@@ -3,8 +3,9 @@ export interface Exam {
   exam_name: string;
   amount: number;
   extra_fees: number | null;
+  extra_fees_name: string | null;
   allows_installments: boolean;
-  applicable_grades: string | null;
+  applicable_grades: string[] | null;
 }
 
 export interface Student {

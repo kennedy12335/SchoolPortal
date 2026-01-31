@@ -5,7 +5,15 @@ import toast, { Toaster } from 'react-hot-toast';
 import { config } from '../../config';
 import { Exam } from '../../types/types';
 
-const YEAR_OPTIONS = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 11', 'Year 12'];
+// Use enum names as values so the frontend stores and displays backend-compatible values
+const YEAR_OPTIONS = [
+  { label: 'Year 7', value: 'YEAR_7' },
+  { label: 'Year 8', value: 'YEAR_8' },
+  { label: 'Year 9', value: 'YEAR_9' },
+  { label: 'Year 10', value: 'YEAR_10' },
+  { label: 'Year 11', value: 'YEAR_11' },
+  { label: 'Year 12', value: 'YEAR_12' },
+];
 
 const ExamManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -17,9 +25,12 @@ const ExamManagement: React.FC = () => {
     exam_name: '',
     amount: '',
     extra_fees: '',
+    extra_fees_name: '',
     allows_installments: false,
     applicable_grades: [] as string[],
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
 
   useEffect(() => {
     fetchExams();
@@ -39,13 +50,16 @@ const ExamManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setSubmitMessage(editingExam ? 'Updating exam and associating students...' : 'Associating students with the exam...');
 
     const payload = {
       exam_name: formData.exam_name,
       amount: parseFloat(formData.amount),
       extra_fees: formData.extra_fees ? parseFloat(formData.extra_fees) : 0,
+      extra_fees_name: formData.extra_fees_name || null,
       allows_installments: formData.allows_installments,
-      applicable_grades: formData.applicable_grades.length > 0 ? formData.applicable_grades.join(',') : null,
+      applicable_grades: formData.applicable_grades.length > 0 ? formData.applicable_grades : null,
     };
 
     try {
@@ -65,8 +79,11 @@ const ExamManagement: React.FC = () => {
     } catch (error) {
       toast.error(editingExam ? 'Failed to update exam' : 'Failed to create exam');
       console.error(error);
+    } finally {
+      setSubmitting(false);
+      setSubmitMessage('');
     }
-  };
+  }; 
 
   const handleDelete = async (examId: string) => {
     if (!window.confirm('Are you sure you want to delete this exam? This action cannot be undone.')) {
@@ -89,8 +106,9 @@ const ExamManagement: React.FC = () => {
       exam_name: exam.exam_name,
       amount: exam.amount.toString(),
       extra_fees: exam.extra_fees?.toString() || '',
+      extra_fees_name: exam.extra_fees_name || '',
       allows_installments: exam.allows_installments,
-      applicable_grades: exam.applicable_grades ? exam.applicable_grades.split(',') : [],
+      applicable_grades: exam.applicable_grades ?? [],
     });
     setShowModal(true);
   };
@@ -106,6 +124,7 @@ const ExamManagement: React.FC = () => {
       exam_name: '',
       amount: '',
       extra_fees: '',
+      extra_fees_name: '',
       allows_installments: false,
       applicable_grades: [],
     });
@@ -169,6 +188,9 @@ const ExamManagement: React.FC = () => {
                 Extra Fees
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Extra Fees Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Installments
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -182,7 +204,7 @@ const ExamManagement: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {exams.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   No exams found. Click "Add Exam" to create one.
                 </td>
               </tr>
@@ -201,6 +223,11 @@ const ExamManagement: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {exam.extra_fees_name || '-'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         exam.allows_installments
@@ -213,9 +240,9 @@ const ExamManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900 max-w-xs">
-                      {exam.applicable_grades ? (
+                      {exam.applicable_grades && exam.applicable_grades.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {exam.applicable_grades.split(',').map((year) => (
+                          {exam.applicable_grades.map((year) => (
                             <span
                               key={year}
                               className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded"
@@ -314,6 +341,19 @@ const ExamManagement: React.FC = () => {
               </div>
 
               <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Extra Fees Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.extra_fees_name}
+                  onChange={(e) => setFormData({ ...formData, extra_fees_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., Study Materials, Registration Fee"
+                />
+              </div>
+
+              <div className="mb-4">
                 <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -338,41 +378,64 @@ const ExamManagement: React.FC = () => {
                   Select the year groups this exam applies to. Leave empty for all years.
                 </p>
                 <div className="grid grid-cols-3 gap-2">
-                  {YEAR_OPTIONS.map((year) => (
+                  {YEAR_OPTIONS.map((opt) => (
                     <label
-                      key={year}
+                      key={opt.value}
                       className={`flex items-center justify-center px-3 py-2 border rounded-lg cursor-pointer transition-colors ${
-                        formData.applicable_grades.includes(year)
+                        formData.applicable_grades.includes(opt.value)
                           ? 'bg-blue-600 text-white border-blue-600'
                           : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
                       }`}
                     >
                       <input
                         type="checkbox"
-                        checked={formData.applicable_grades.includes(year)}
-                        onChange={() => handleYearToggle(year)}
+                        checked={formData.applicable_grades.includes(opt.value)}
+                        onChange={() => handleYearToggle(opt.value)}
                         className="sr-only"
                       />
-                      {year}
+                      {opt.label}
                     </label>
                   ))}
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  {editingExam ? 'Update Exam' : 'Create Exam'}
-                </button>
+              <div className="flex flex-col gap-2">
+                {submitMessage && (
+                  <div className="text-sm text-gray-700 flex items-center">
+                    <svg className="animate-spin h-4 w-4 mr-2 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    <span>{submitMessage}</span>
+                  </div>
+                )}
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg transition-colors ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+                  >
+                    {submitting ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin h-4 w-4 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                        {editingExam ? 'Updating...' : 'Creating...'}
+                      </span>
+                    ) : (
+                      editingExam ? 'Update Exam' : 'Create Exam'
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

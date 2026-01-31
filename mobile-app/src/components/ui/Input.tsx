@@ -26,7 +26,7 @@ export const Input: React.FC<InputProps> = ({
       <View style={[styles.inputContainer, error && styles.inputError]}>
         {prefix && <View style={styles.prefix}>{prefix}</View>}
         <TextInput
-          style={[styles.input, prefix && styles.inputWithPrefix, suffix && styles.inputWithSuffix, inputStyle]}
+          style={[styles.input, prefix ? styles.inputWithPrefix : undefined, suffix ? styles.inputWithSuffix : undefined, inputStyle]}
           placeholderTextColor={colors.gray400}
           {...props}
         />
@@ -49,28 +49,28 @@ export const Label: React.FC<LabelProps> = ({ children, style }) => (
 const styles = StyleSheet.create({
   label: {
     fontSize: typography.sm,
-    fontWeight: typography.semibold,
+    fontWeight: typography.medium,
     color: colors.foreground,
     marginBottom: spacing[2],
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.gray300,
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
     borderRadius: borderRadius.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
   inputError: {
     borderColor: colors.error,
   },
   input: {
     flex: 1,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2.5],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     fontSize: typography.base,
     color: colors.foreground,
-    minHeight: 44,
+    minHeight: 48,
   },
   inputWithPrefix: {
     paddingLeft: spacing[1],
@@ -79,10 +79,10 @@ const styles = StyleSheet.create({
     paddingRight: spacing[1],
   },
   prefix: {
-    paddingLeft: spacing[3],
+    paddingLeft: spacing[4],
   },
   suffix: {
-    paddingRight: spacing[3],
+    paddingRight: spacing[4],
   },
   errorText: {
     fontSize: typography.sm,

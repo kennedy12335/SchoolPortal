@@ -1,18 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
-import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '../ui';
-
-// Icons
-const PlusIcon = () => <Text style={styles.iconText}>+</Text>;
-const MinusIcon = () => <Text style={styles.iconText}>−</Text>;
-const CheckIcon = () => <Text style={styles.iconText}>✓</Text>;
+import { Card, CardHeader, CardTitle, CardContent, Badge, Checkbox } from '../ui';
 
 export interface Exam {
   exam_id: string;
   exam_name: string;
   exam_price: number;
   extra_fees: number;
+  extra_fees_name?: string;
+  allows_installments?: boolean;
   amount_paid: number;
   amount_due: number;
   is_fully_paid: boolean;
@@ -25,10 +23,9 @@ interface ExamListProps {
 }
 
 export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onToggleExam }) => {
-  const allowsPartialPayment = (examName: string): boolean => {
-    const name = examName.toLowerCase();
-    return name.includes('igcse') || name.includes('checkpoint');
-  };
+  // `allows_installments` is provided by the API on the exam object
+  // and indicates whether installment payments are allowed for that exam.
+
 
   const unpaidExams = exams.filter((e) => !e.is_fully_paid);
   const paidExams = exams.filter((e) => e.is_fully_paid);
@@ -36,7 +33,12 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onTo
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Available Exams</CardTitle>
+        <View style={styles.headerContent}>
+          <CardTitle>Available Exams</CardTitle>
+          {unpaidExams.length > 0 && (
+            <Text style={styles.helperText}>Select one or more exams to pay for</Text>
+          )}
+        </View>
       </CardHeader>
       <CardContent style={styles.content}>
         {/* Unpaid Exams */}
@@ -44,18 +46,24 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onTo
           <View style={styles.examGroup}>
             {unpaidExams.map((exam) => {
               const isSelected = selectedExamIds.has(exam.exam_id);
-              const allowsPartial = allowsPartialPayment(exam.exam_name);
+              const allowsInstallments = !!exam.allows_installments;
 
               return (
-                <View
+                <TouchableOpacity
                   key={exam.exam_id}
                   style={[styles.examItem, isSelected && styles.examItemSelected]}
+                  onPress={() => onToggleExam(exam.exam_id, exam)}
+                  activeOpacity={0.7}
                 >
+                  <Checkbox
+                    checked={isSelected}
+                    onPress={() => onToggleExam(exam.exam_id, exam)}
+                  />
                   <View style={styles.examInfo}>
                     <View style={styles.examHeader}>
                       <Text style={styles.examName}>{exam.exam_name}</Text>
                       <View style={styles.examBadges}>
-                        {allowsPartial && (
+                        {allowsInstallments && (
                           <Badge variant="secondary" size="sm">
                             Installments
                           </Badge>
@@ -68,21 +76,15 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onTo
                       </View>
                     </View>
                     <View style={styles.examPriceRow}>
-                      <Text style={styles.examPrice}>₦{exam.exam_price.toLocaleString()}</Text>
+                      <Text style={styles.examPrice}>N{exam.exam_price.toLocaleString()}</Text>
                       {exam.amount_due < exam.exam_price && (
                         <Text style={styles.examDue}>
-                          Due: ₦{exam.amount_due.toLocaleString()}
+                          Due: N{exam.amount_due.toLocaleString()}
                         </Text>
                       )}
                     </View>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => onToggleExam(exam.exam_id, exam)}
-                    style={[styles.toggleButton, isSelected && styles.toggleButtonSelected]}
-                  >
-                    {isSelected ? <MinusIcon /> : <PlusIcon />}
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -96,10 +98,10 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onTo
               <View key={exam.exam_id} style={[styles.examItem, styles.examItemPaid]}>
                 <View style={styles.examInfo}>
                   <Text style={[styles.examName, styles.examNamePaid]}>{exam.exam_name}</Text>
-                  <Text style={styles.examPrice}>₦{exam.exam_price.toLocaleString()}</Text>
+                  <Text style={styles.examPrice}>N{exam.exam_price.toLocaleString()}</Text>
                 </View>
                 <View style={styles.paidIcon}>
-                  <CheckIcon />
+                  <Ionicons name="checkmark" size={16} color={colors.white} />
                 </View>
               </View>
             ))}
@@ -115,6 +117,14 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, selectedExamIds, onTo
 };
 
 const styles = StyleSheet.create({
+  headerContent: {
+    gap: spacing[1],
+  },
+  helperText: {
+    fontSize: typography.sm,
+    color: colors.mutedForeground,
+    fontWeight: typography.normal,
+  },
   content: {
     gap: spacing[4],
   },
@@ -130,23 +140,21 @@ const styles = StyleSheet.create({
   examItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing[3],
-    backgroundColor: colors.background,
+    padding: spacing[4],
+    backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     gap: spacing[3],
   },
   examItemSelected: {
     borderColor: colors.primary,
-    borderWidth: 2,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
   },
   examItemPaid: {
     opacity: 0.6,
     backgroundColor: colors.successLight,
-    borderColor: colors.success,
+    borderColor: colors.successBorder,
   },
   examInfo: {
     flex: 1,
@@ -184,17 +192,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     color: colors.warning,
   },
-  toggleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.gray100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleButtonSelected: {
-    backgroundColor: colors.error,
-  },
   paidIcon: {
     width: 36,
     height: 36,
@@ -208,11 +205,6 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textAlign: 'center',
     paddingVertical: spacing[4],
-  },
-  iconText: {
-    fontSize: 18,
-    fontWeight: typography.bold,
-    color: colors.foreground,
   },
 });
 

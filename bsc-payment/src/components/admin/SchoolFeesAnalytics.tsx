@@ -81,7 +81,7 @@ const StudentListSection: React.FC<{
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, currentPage]);
 
   const handleYearGroupChange = (value: string) => {
     setYearGroupFilter(value);
