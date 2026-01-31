@@ -52,7 +52,6 @@ async def initialize_payment_endpoint(payment: PaymentCreate, db: Session = Depe
         # Calculate and validate the amount (no clubs)
         fee_calculation = await calculate_fees(
             student_ids=payment.student_ids,
-            student_club_ids={},  # No clubs
             db=db
         )
         

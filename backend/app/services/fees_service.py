@@ -15,7 +15,6 @@ from ..schemas.fees import (
 async def calculate_fees(
     *,
     student_ids: List[str],
-    student_club_ids: Dict[str, List[str]],  # Keep for compatibility but ignore
     db: Session,
 ) -> DetailedFeeCalculationResponse:
     fee_rows = db.query(Fee).all()

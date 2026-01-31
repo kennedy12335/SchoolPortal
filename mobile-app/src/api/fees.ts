@@ -17,8 +17,7 @@ export type FeeCalculationResponse = {
 export const FeesApi = {
   calculate(student_ids: string[]) {
     return post<FeeCalculationResponse>(`/api/fees/calculate-fees`, {
-      student_ids,
-      student_club_ids: {},
+      student_ids
     });
   },
 };

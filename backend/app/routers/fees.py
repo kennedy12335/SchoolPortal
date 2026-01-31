@@ -27,6 +27,11 @@ class FeesResponse(BaseModel):
     fees: Dict[str, float]
     total: float
 
+
+class CalculateFeesRequest(BaseModel):
+    student_ids: List[str]
+
+
 @router.get("/", response_model=FeesResponse)
 async def get_fees(db: Session = Depends(get_db)):
     logger.info("Fetching current fees")
@@ -80,14 +85,12 @@ def update_fees(fee_updates: Dict[str, float], db: Session = Depends(get_db)):
 
 @router.post("/calculate-fees", response_model=DetailedFeeCalculationResponse)
 async def calculate_fees_endpoint(
-    student_ids: List[str],
-    student_club_ids: Dict[str, List[str]],
+    request: CalculateFeesRequest,
     db: Session = Depends(get_db)
 ):
     try:
         return await calculate_fees_service(
-            student_ids=student_ids,
-            student_club_ids=student_club_ids,
+            student_ids=request.student_ids,
             db=db,
         )
 
